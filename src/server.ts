@@ -1,4 +1,8 @@
 import "./lib/error-capture";
+import "./lib/auth/auth-server-fns";
+import "./lib/auth/account-request-server-fns";
+import "./lib/auth/password-server-fns";
+import "./lib/auth/google-server-fns";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";

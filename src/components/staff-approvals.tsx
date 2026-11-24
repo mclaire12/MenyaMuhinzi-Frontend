@@ -1,9 +1,12 @@
-import { useQuery,useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-export function StaffApprovals(){const qc=useQueryClient();const [busy,setBusy]=useState<string>();const q=useQuery({queryKey:["staff-approvals"],queryFn:async()=>{const [r,p]=await Promise.all([supabase.from("staff_requests").select("*").order("created_at"),supabase.from("profiles").select("id,full_name")]);if(r.error)throw r.error;if(p.error)throw p.error;return {requests:r.data,profiles:p.data};}});
-async function review(id:string,approve:boolean){setBusy(id);const r=await supabase.rpc("review_staff_request",{request_id:id,approve});setBusy(undefined);if(r.error){toast.error("Ntibyakunze gusuzuma ubusabe.");return;}toast.success(approve?"Uburenganzira bwemejwe":"Ubusabe ntibwemejwe");qc.invalidateQueries({queryKey:["staff-approvals"]});}
-return <section className="mt-10 border-t pt-8"><h2 className="mb-5 text-3xl">Kwemeza abakozi</h2>{q.isLoading?<p>Birimo gufunguka…</p>:q.isError?<p role="alert">Ntibyakunze gufungura ubusabe.</p>:!q.data?.requests.length?<p className="text-muted-foreground">Nta busabe burahari.</p>:<ul className="divide-y">{q.data.requests.map(r=><li key={r.id} className="flex flex-wrap items-center justify-between gap-4 py-5"><div className="min-w-0 flex-1"><b>{q.data.profiles.find(p=>p.id===r.user_id)?.full_name || "Umukoresha"}</b><p className="text-sm text-primary">{r.requested_role} · {r.status}</p><p className="mt-2 break-words text-sm text-muted-foreground">{r.reason}</p></div>{r.status==="pending"&&<div className="flex gap-2"><Button onClick={()=>review(r.id,true)} disabled={busy===r.id}>Emeza</Button><Button variant="outline" onClick={()=>review(r.id,false)} disabled={busy===r.id}>Hakana</Button></div>}</li>)}</ul>}<Button className="mt-6" variant="outline" onClick={async()=>{const r=await supabase.rpc("resume_learning_ai");r.error?toast.error("Ntibyakunze kongera gufungura AI."):toast.success("AI yongeye gufungurwa niba uburenganzira bwagarutse.");}}>Ongera ufungure AI</Button></section>;
+
+export function StaffApprovals() {
+  return (
+    <section className="mt-10 border-t pt-8">
+      <h2 className="mb-3 text-3xl">Kwemeza abakozi</h2>
+      <p className="text-sm text-muted-foreground">Kwemeza konti no guha uruhare bikorwa mu rubuga rw’umuyobozi.</p>
+      <Button asChild className="mt-4"><Link to="/admin/users" search={{ tab: "approvals" }}>Fungura People · Approvals</Link></Button>
+    </section>
+  );
 }

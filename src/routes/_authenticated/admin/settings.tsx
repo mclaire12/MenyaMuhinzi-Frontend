@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PageHead, useAdminActor } from "@/components/admin/shell";
@@ -23,6 +23,7 @@ function SettingsPage() {
   return <>
     <PageHead title="Settings" text="Platform information, languages, publication defaults and permissions. Credentials and API keys are never entered here; they belong in the server's secret store." />
     <div className="grid items-start gap-3 md:grid-cols-2">
+      <AccountSecurity />
       <General />
       <Languages />
       <Publication />
@@ -31,6 +32,20 @@ function SettingsPage() {
       <DemoData />
     </div>
   </>;
+}
+
+function AccountSecurity() {
+  return (
+    <section className="admin-panel space-y-3">
+      <h2 className="text-lg">Your account</h2>
+      <p className="text-sm text-muted-foreground">
+        Platform settings below do not change your personal sign-in password.
+      </p>
+      <Button asChild variant="outline">
+        <Link to="/account/password">Change password</Link>
+      </Button>
+    </section>
+  );
 }
 
 function General() {

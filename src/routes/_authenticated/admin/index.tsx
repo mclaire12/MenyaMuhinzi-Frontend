@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHead } from "@/components/admin/shell";
+import { useAuth } from "@/hooks/use-auth";
+import { accountRequestStatusCountQueryOptions } from "@/lib/admin/account-request-approvals";
 import { locationOf } from "@/lib/admin/people";
 import { useAdmin } from "@/lib/admin/store";
 import { useLearningState } from "@/lib/mock/store";
@@ -17,6 +20,11 @@ function within(iso: string, days: number) {
 function Dashboard() {
   const admin = useAdmin();
   const learning = useLearningState();
+  const { permissions, loading: authLoading } = useAuth();
+  const canReadApprovals = permissions.includes("account-requests:read");
+  const pendingApprovalsQuery = useQuery(
+    accountRequestStatusCountQueryOptions("PENDING", canReadApprovals && !authLoading),
+  );
   const [days, setDays] = useState(30);
   const view = useMemo(() => {
     const users = admin.users;
@@ -40,13 +48,20 @@ function Dashboard() {
     return { trend, channels, places, registrations: registrations.length, completions: completions.length, active, farmers: farmers.length };
   }, [admin, learning, days]);
   const courses = learning.courses;
+  let pendingApprovals: string | number = "—";
+  if (canReadApprovals && !authLoading) {
+    if (pendingApprovalsQuery.isLoading) pendingApprovals = "…";
+    else if (!pendingApprovalsQuery.isError && typeof pendingApprovalsQuery.data === "number") {
+      pendingApprovals = pendingApprovalsQuery.data;
+    }
+  }
   const stats = [
     ["Users", admin.users.length],
     ["Farmers", view.farmers],
     ["Smartphone", view.channels[0]?.value ?? 0],
     ["Basic phone", view.channels[1]?.value ?? 0],
     ["Facilitators", admin.users.filter((user) => user.role === "FACILITATOR").length],
-    ["Pending approvals", admin.users.filter((user) => user.status === "pending").length],
+    ["Pending approvals", pendingApprovals],
     ["Courses", courses.length],
     ["Published", courses.filter((course) => course.status === "published").length],
     ["Drafts", courses.filter((course) => course.status === "draft").length],

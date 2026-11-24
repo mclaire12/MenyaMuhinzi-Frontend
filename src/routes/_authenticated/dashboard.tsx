@@ -8,7 +8,6 @@ import { CourseCard } from "@/components/course-card";
 import { CourseLoading, LearningFeedback, LearningStat, SectionHeading } from "@/components/learning-ui";
 import { allLessons, coursesQuery, courseProgress, myLearningQuery } from "@/lib/learning";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
 import { farmerByAccount, farmerNotices } from "@/lib/mock/services/farmer";
 import { useLearningState } from "@/lib/mock/store";
 import harvest from "@/assets/harvest-illustration.jpg";
@@ -27,7 +26,6 @@ function Dashboard() {
   const { data: courses } = coursesState;
   const mineState = useQuery(myLearningQuery(uid));
   const { data: mine } = mineState;
-  const { data: profile } = useQuery({ queryKey: ["profile", uid], enabled: !!uid && !user?.demo, queryFn: async () => { if (!uid) return null; return (await supabase.from("profiles").select("full_name, district").eq("id", uid).maybeSingle()).data; } });
   const completed = new Set(mine?.progress.filter(p => p.status === "completed").map(p => p.lesson_id));
   const enrolledIds = new Set(mine?.enrollments.map(e => e.course_id));
   const enrolled = courses?.filter(c => enrolledIds.has(c.id)) ?? [];
@@ -45,7 +43,7 @@ function Dashboard() {
   const loading = coursesState.isLoading || mineState.isLoading;
   const error = coursesState.isError || mineState.isError;
   return <div className="page-width pb-14"><BackLink />
-    <div className="page-heading"><div><p className="eyebrow mb-3">MURAKAZA NEZA</p><h1>Muraho{farmer?.name || profile?.full_name || user?.name ? `, ${farmer?.name || profile?.full_name || user?.name}` : ""}!</h1><p className="mt-3 text-muted-foreground">{farmer ? `${farmer.district} · ${farmer.phone}` : profile?.district ?? "Hitamo isomo, usome, urebe cyangwa wumve."}</p>{user && <Button asChild variant="link" className="px-0"><Link to="/notices">Amamenyesha{unread ? ` (${unread})` : ""}</Link></Button>}</div><Logo className="size-12" /></div>
+    <div className="page-heading"><div><p className="eyebrow mb-3">MURAKAZA NEZA</p><h1>Muraho{farmer?.name || user?.name ? `, ${farmer?.name || user?.name}` : ""}!</h1><p className="mt-3 text-muted-foreground">{farmer ? `${farmer.district} · ${farmer.phone}` : "Hitamo isomo, usome, urebe cyangwa wumve."}</p>{user && <Button asChild variant="link" className="px-0"><Link to="/notices">Amamenyesha{unread ? ` (${unread})` : ""}</Link></Button>}</div><Logo className="size-12" /></div>
     {loading ? <CourseLoading /> : error ? <LearningFeedback error retry={() => { coursesState.refetch(); mineState.refetch(); }} /> : <>
       <div className="dashboard-bento">
         {current?.p.next ? <section className="continue-panel"><p className="eyebrow mb-5">KOMEZA KWIGA · {current.c.title}</p><h2 className="text-3xl">{current.p.next.title}</h2><p className="mt-3 text-sm leading-relaxed opacity-90">{current.p.next.summary} · Iminota {current.p.next.duration_minutes}</p><Button asChild size="xl" variant="secondary" className="mt-7"><Link to="/lessons/$lessonId" params={{ lessonId: current.p.next.id }}>Fungura isomo<ArrowRight aria-hidden /></Link></Button></section> : <section className="welcome-panel"><div className="min-w-0 flex-1"><p className="eyebrow mb-3">{enrolled.length ? "WAKOZE NEZA!" : "INTAMBWE YA MBERE"}</p><h2 className="text-2xl">{enrolled.length ? "Warangije amasomo yawe" : "Tangira isomo rya mbere"}</h2><p className="mt-3 text-sm text-muted-foreground">Hitamo imboga ushaka kwiga guhinga.</p><Button asChild variant="link" className="mt-4 px-0"><Link to="/courses">Reba amasomo<ArrowRight aria-hidden /></Link></Button></div><img src={harvest} alt="Inyanya, amashu na karoti" width={1024} height={1024} className="w-28 shrink-0 sm:w-36" /></section>}

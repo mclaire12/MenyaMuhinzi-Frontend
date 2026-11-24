@@ -22,8 +22,11 @@ import { Route as AuthenticatedNoticesRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedPhoneRouteImport } from './routes/_authenticated/phone'
 import { Route as AuthenticatedProgressRouteImport } from './routes/_authenticated/progress'
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
+import { Route as AuthForgotRouteImport } from './routes/auth.forgot'
+import { Route as AuthResetRouteImport } from './routes/auth.reset'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesSlugRouteImport } from './routes/courses.$slug'
+import { Route as AuthenticatedAccountPasswordRouteImport } from './routes/_authenticated/account.password'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as AuthenticatedAdminAiRouteImport } from './routes/_authenticated/admin/ai'
 import { Route as AuthenticatedAdminCoursesRouteImport } from './routes/_authenticated/admin/courses'
@@ -41,6 +44,7 @@ import { Route as AuthenticatedFacilitatorTeachingRouteImport } from './routes/_
 import { Route as AuthenticatedGroupMaterialsMaterialIdRouteImport } from './routes/_authenticated/group-materials.$materialId'
 import { Route as AuthenticatedLessonsLessonIdRouteImport } from './routes/_authenticated/lessons.$lessonId'
 import { Route as AuthenticatedQuizCourseIdRouteImport } from './routes/_authenticated/quiz.$courseId'
+import { Route as AuthGoogleCallbackRouteImport } from './routes/auth.google.callback'
 import { Route as AuthenticatedAdminCoursesIndexRouteImport } from './routes/_authenticated/admin/courses.index'
 import { Route as AuthenticatedAdminCoursesCourseIdRouteImport } from './routes/_authenticated/admin/courses.$courseId'
 import { Route as AuthenticatedAdminCoursesGenerateRouteImport } from './routes/_authenticated/admin/courses.generate'
@@ -56,6 +60,7 @@ import { Route as AuthenticatedFacilitatorProgressIndexRouteImport } from './rou
 import { Route as AuthenticatedFacilitatorProgressFarmerIdRouteImport } from './routes/_authenticated/facilitator/progress.$farmerId'
 import { Route as AuthenticatedFacilitatorTeachingIndexRouteImport } from './routes/_authenticated/facilitator/teaching.index'
 import { Route as AuthenticatedFacilitatorTeachingMaterialIdRouteImport } from './routes/_authenticated/facilitator/teaching.$materialId'
+import { Route as AuthenticatedAdminUsersRequestsRequestIdRouteImport } from './routes/_authenticated/admin/users.requests.$requestId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -122,6 +127,16 @@ const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
   path: '/studio',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthForgotRoute = AuthForgotRouteImport.update({
+  id: '/forgot',
+  path: '/forgot',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthResetRoute = AuthResetRouteImport.update({
+  id: '/reset',
+  path: '/reset',
+  getParentRoute: () => AuthRoute,
+} as any)
 const CoursesIndexRoute = CoursesIndexRouteImport.update({
   id: '/courses/',
   path: '/courses/',
@@ -132,6 +147,12 @@ const CoursesSlugRoute = CoursesSlugRouteImport.update({
   path: '/courses/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAccountPasswordRoute =
+  AuthenticatedAccountPasswordRouteImport.update({
+    id: '/account/password',
+    path: '/account/password',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -231,6 +252,11 @@ const AuthenticatedQuizCourseIdRoute =
     path: '/quiz/$courseId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
+  id: '/google/callback',
+  path: '/google/callback',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthenticatedAdminCoursesIndexRoute =
   AuthenticatedAdminCoursesIndexRouteImport.update({
     id: '/',
@@ -321,10 +347,16 @@ const AuthenticatedFacilitatorTeachingMaterialIdRoute =
     path: '/$materialId',
     getParentRoute: () => AuthenticatedFacilitatorTeachingRoute,
   } as any)
+const AuthenticatedAdminUsersRequestsRequestIdRoute =
+  AuthenticatedAdminUsersRequestsRequestIdRouteImport.update({
+    id: '/requests/$requestId',
+    path: '/requests/$requestId',
+    getParentRoute: () => AuthenticatedAdminUsersRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/facilitator': typeof AuthenticatedFacilitatorRouteRouteWithChildren
   '/assistant': typeof AuthenticatedAssistantRoute
@@ -335,8 +367,11 @@ export interface FileRoutesByFullPath {
   '/phone': typeof AuthenticatedPhoneRoute
   '/progress': typeof AuthenticatedProgressRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/auth/forgot': typeof AuthForgotRoute
+  '/auth/reset': typeof AuthResetRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/courses/': typeof CoursesIndexRoute
+  '/account/password': typeof AuthenticatedAccountPasswordRoute
   '/admin/ai': typeof AuthenticatedAdminAiRoute
   '/admin/courses': typeof AuthenticatedAdminCoursesRouteWithChildren
   '/admin/groups': typeof AuthenticatedAdminGroupsRouteWithChildren
@@ -352,6 +387,7 @@ export interface FileRoutesByFullPath {
   '/group-materials/$materialId': typeof AuthenticatedGroupMaterialsMaterialIdRoute
   '/lessons/$lessonId': typeof AuthenticatedLessonsLessonIdRoute
   '/quiz/$courseId': typeof AuthenticatedQuizCourseIdRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/facilitator/': typeof AuthenticatedFacilitatorIndexRoute
   '/admin/courses/$courseId': typeof AuthenticatedAdminCoursesCourseIdRoute
@@ -369,10 +405,11 @@ export interface FileRoutesByFullPath {
   '/facilitator/groups/': typeof AuthenticatedFacilitatorGroupsIndexRoute
   '/facilitator/progress/': typeof AuthenticatedFacilitatorProgressIndexRoute
   '/facilitator/teaching/': typeof AuthenticatedFacilitatorTeachingIndexRoute
+  '/admin/users/requests/$requestId': typeof AuthenticatedAdminUsersRequestsRequestIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/assistant': typeof AuthenticatedAssistantRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/manage': typeof AuthenticatedManageRoute
@@ -381,8 +418,11 @@ export interface FileRoutesByTo {
   '/phone': typeof AuthenticatedPhoneRoute
   '/progress': typeof AuthenticatedProgressRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/auth/forgot': typeof AuthForgotRoute
+  '/auth/reset': typeof AuthResetRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/courses': typeof CoursesIndexRoute
+  '/account/password': typeof AuthenticatedAccountPasswordRoute
   '/admin/ai': typeof AuthenticatedAdminAiRoute
   '/admin/knowledge': typeof AuthenticatedAdminKnowledgeRoute
   '/admin/operations': typeof AuthenticatedAdminOperationsRoute
@@ -391,6 +431,7 @@ export interface FileRoutesByTo {
   '/group-materials/$materialId': typeof AuthenticatedGroupMaterialsMaterialIdRoute
   '/lessons/$lessonId': typeof AuthenticatedLessonsLessonIdRoute
   '/quiz/$courseId': typeof AuthenticatedQuizCourseIdRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/facilitator': typeof AuthenticatedFacilitatorIndexRoute
   '/admin/courses/$courseId': typeof AuthenticatedAdminCoursesCourseIdRoute
@@ -408,12 +449,13 @@ export interface FileRoutesByTo {
   '/facilitator/groups': typeof AuthenticatedFacilitatorGroupsIndexRoute
   '/facilitator/progress': typeof AuthenticatedFacilitatorProgressIndexRoute
   '/facilitator/teaching': typeof AuthenticatedFacilitatorTeachingIndexRoute
+  '/admin/users/requests/$requestId': typeof AuthenticatedAdminUsersRequestsRequestIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/facilitator': typeof AuthenticatedFacilitatorRouteRouteWithChildren
   '/_authenticated/assistant': typeof AuthenticatedAssistantRoute
@@ -424,8 +466,11 @@ export interface FileRoutesById {
   '/_authenticated/phone': typeof AuthenticatedPhoneRoute
   '/_authenticated/progress': typeof AuthenticatedProgressRoute
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
+  '/auth/forgot': typeof AuthForgotRoute
+  '/auth/reset': typeof AuthResetRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/courses/': typeof CoursesIndexRoute
+  '/_authenticated/account/password': typeof AuthenticatedAccountPasswordRoute
   '/_authenticated/admin/ai': typeof AuthenticatedAdminAiRoute
   '/_authenticated/admin/courses': typeof AuthenticatedAdminCoursesRouteWithChildren
   '/_authenticated/admin/groups': typeof AuthenticatedAdminGroupsRouteWithChildren
@@ -441,6 +486,7 @@ export interface FileRoutesById {
   '/_authenticated/group-materials/$materialId': typeof AuthenticatedGroupMaterialsMaterialIdRoute
   '/_authenticated/lessons/$lessonId': typeof AuthenticatedLessonsLessonIdRoute
   '/_authenticated/quiz/$courseId': typeof AuthenticatedQuizCourseIdRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/facilitator/': typeof AuthenticatedFacilitatorIndexRoute
   '/_authenticated/admin/courses/$courseId': typeof AuthenticatedAdminCoursesCourseIdRoute
@@ -458,6 +504,7 @@ export interface FileRoutesById {
   '/_authenticated/facilitator/groups/': typeof AuthenticatedFacilitatorGroupsIndexRoute
   '/_authenticated/facilitator/progress/': typeof AuthenticatedFacilitatorProgressIndexRoute
   '/_authenticated/facilitator/teaching/': typeof AuthenticatedFacilitatorTeachingIndexRoute
+  '/_authenticated/admin/users/requests/$requestId': typeof AuthenticatedAdminUsersRequestsRequestIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -474,8 +521,11 @@ export interface FileRouteTypes {
     | '/phone'
     | '/progress'
     | '/studio'
+    | '/auth/forgot'
+    | '/auth/reset'
     | '/courses/$slug'
     | '/courses/'
+    | '/account/password'
     | '/admin/ai'
     | '/admin/courses'
     | '/admin/groups'
@@ -491,6 +541,7 @@ export interface FileRouteTypes {
     | '/group-materials/$materialId'
     | '/lessons/$lessonId'
     | '/quiz/$courseId'
+    | '/auth/google/callback'
     | '/admin/'
     | '/facilitator/'
     | '/admin/courses/$courseId'
@@ -508,6 +559,7 @@ export interface FileRouteTypes {
     | '/facilitator/groups/'
     | '/facilitator/progress/'
     | '/facilitator/teaching/'
+    | '/admin/users/requests/$requestId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -520,8 +572,11 @@ export interface FileRouteTypes {
     | '/phone'
     | '/progress'
     | '/studio'
+    | '/auth/forgot'
+    | '/auth/reset'
     | '/courses/$slug'
     | '/courses'
+    | '/account/password'
     | '/admin/ai'
     | '/admin/knowledge'
     | '/admin/operations'
@@ -530,6 +585,7 @@ export interface FileRouteTypes {
     | '/group-materials/$materialId'
     | '/lessons/$lessonId'
     | '/quiz/$courseId'
+    | '/auth/google/callback'
     | '/admin'
     | '/facilitator'
     | '/admin/courses/$courseId'
@@ -547,6 +603,7 @@ export interface FileRouteTypes {
     | '/facilitator/groups'
     | '/facilitator/progress'
     | '/facilitator/teaching'
+    | '/admin/users/requests/$requestId'
   id:
     | '__root__'
     | '/'
@@ -562,8 +619,11 @@ export interface FileRouteTypes {
     | '/_authenticated/phone'
     | '/_authenticated/progress'
     | '/_authenticated/studio'
+    | '/auth/forgot'
+    | '/auth/reset'
     | '/courses/$slug'
     | '/courses/'
+    | '/_authenticated/account/password'
     | '/_authenticated/admin/ai'
     | '/_authenticated/admin/courses'
     | '/_authenticated/admin/groups'
@@ -579,6 +639,7 @@ export interface FileRouteTypes {
     | '/_authenticated/group-materials/$materialId'
     | '/_authenticated/lessons/$lessonId'
     | '/_authenticated/quiz/$courseId'
+    | '/auth/google/callback'
     | '/_authenticated/admin/'
     | '/_authenticated/facilitator/'
     | '/_authenticated/admin/courses/$courseId'
@@ -596,12 +657,13 @@ export interface FileRouteTypes {
     | '/_authenticated/facilitator/groups/'
     | '/_authenticated/facilitator/progress/'
     | '/_authenticated/facilitator/teaching/'
+    | '/_authenticated/admin/users/requests/$requestId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  AuthRoute: typeof AuthRoute
+  AuthRoute: typeof AuthRouteWithChildren
   CoursesSlugRoute: typeof CoursesSlugRoute
   CoursesIndexRoute: typeof CoursesIndexRoute
 }
@@ -699,6 +761,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedStudioRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/auth/forgot': {
+      id: '/auth/forgot'
+      path: '/forgot'
+      fullPath: '/auth/forgot'
+      preLoaderRoute: typeof AuthForgotRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/reset': {
+      id: '/auth/reset'
+      path: '/reset'
+      fullPath: '/auth/reset'
+      preLoaderRoute: typeof AuthResetRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/courses/': {
       id: '/courses/'
       path: '/courses'
@@ -712,6 +788,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/courses/$slug'
       preLoaderRoute: typeof CoursesSlugRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/account/password': {
+      id: '/_authenticated/account/password'
+      path: '/account/password'
+      fullPath: '/account/password'
+      preLoaderRoute: typeof AuthenticatedAccountPasswordRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/admin/': {
       id: '/_authenticated/admin/'
@@ -832,6 +915,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedQuizCourseIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/auth/google/callback': {
+      id: '/auth/google/callback'
+      path: '/google/callback'
+      fullPath: '/auth/google/callback'
+      preLoaderRoute: typeof AuthGoogleCallbackRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_authenticated/admin/courses/': {
       id: '/_authenticated/admin/courses/'
       path: '/'
@@ -937,6 +1027,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFacilitatorTeachingMaterialIdRouteImport
       parentRoute: typeof AuthenticatedFacilitatorTeachingRoute
     }
+    '/_authenticated/admin/users/requests/$requestId': {
+      id: '/_authenticated/admin/users/requests/$requestId'
+      path: '/requests/$requestId'
+      fullPath: '/admin/users/requests/$requestId'
+      preLoaderRoute: typeof AuthenticatedAdminUsersRequestsRequestIdRouteImport
+      parentRoute: typeof AuthenticatedAdminUsersRoute
+    }
   }
 }
 
@@ -979,12 +1076,15 @@ const AuthenticatedAdminGroupsRouteWithChildren =
 interface AuthenticatedAdminUsersRouteChildren {
   AuthenticatedAdminUsersUserIdRoute: typeof AuthenticatedAdminUsersUserIdRoute
   AuthenticatedAdminUsersIndexRoute: typeof AuthenticatedAdminUsersIndexRoute
+  AuthenticatedAdminUsersRequestsRequestIdRoute: typeof AuthenticatedAdminUsersRequestsRequestIdRoute
 }
 
 const AuthenticatedAdminUsersRouteChildren: AuthenticatedAdminUsersRouteChildren =
   {
     AuthenticatedAdminUsersUserIdRoute: AuthenticatedAdminUsersUserIdRoute,
     AuthenticatedAdminUsersIndexRoute: AuthenticatedAdminUsersIndexRoute,
+    AuthenticatedAdminUsersRequestsRequestIdRoute:
+      AuthenticatedAdminUsersRequestsRequestIdRoute,
   }
 
 const AuthenticatedAdminUsersRouteWithChildren =
@@ -1132,6 +1232,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPhoneRoute: typeof AuthenticatedPhoneRoute
   AuthenticatedProgressRoute: typeof AuthenticatedProgressRoute
   AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
+  AuthenticatedAccountPasswordRoute: typeof AuthenticatedAccountPasswordRoute
   AuthenticatedGroupMaterialsMaterialIdRoute: typeof AuthenticatedGroupMaterialsMaterialIdRoute
   AuthenticatedLessonsLessonIdRoute: typeof AuthenticatedLessonsLessonIdRoute
   AuthenticatedQuizCourseIdRoute: typeof AuthenticatedQuizCourseIdRoute
@@ -1149,6 +1250,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPhoneRoute: AuthenticatedPhoneRoute,
   AuthenticatedProgressRoute: AuthenticatedProgressRoute,
   AuthenticatedStudioRoute: AuthenticatedStudioRoute,
+  AuthenticatedAccountPasswordRoute: AuthenticatedAccountPasswordRoute,
   AuthenticatedGroupMaterialsMaterialIdRoute:
     AuthenticatedGroupMaterialsMaterialIdRoute,
   AuthenticatedLessonsLessonIdRoute: AuthenticatedLessonsLessonIdRoute,
@@ -1158,10 +1260,24 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface AuthRouteChildren {
+  AuthForgotRoute: typeof AuthForgotRoute
+  AuthResetRoute: typeof AuthResetRoute
+  AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
+}
+
+const AuthRouteChildren: AuthRouteChildren = {
+  AuthForgotRoute: AuthForgotRoute,
+  AuthResetRoute: AuthResetRoute,
+  AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
+}
+
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  AuthRoute: AuthRoute,
+  AuthRoute: AuthRouteWithChildren,
   CoursesSlugRoute: CoursesSlugRoute,
   CoursesIndexRoute: CoursesIndexRoute,
 }

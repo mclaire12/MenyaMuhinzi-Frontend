@@ -1,57 +1,148 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
-import { readDemoUser, signOutDemo, type DemoRole, type DemoSession } from "@/lib/demo-auth";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { CurrentUserResponse, Permission, UserRole } from "@/lib/api/types";
+import { toAppRoles, isStaffRole, type AppRole } from "@/lib/auth/app-roles";
+import { isUnavailableAuthError, parseBffError } from "@/lib/auth/parse-bff-error";
+import {
+  bffGetCurrentUser,
+  bffLogin,
+  bffLogout,
+  bffRestoreSession,
+  type BffLoginResult,
+} from "@/lib/auth/auth-server-fns";
 
-type Role = DemoRole;
-type AppUser = { id: string; email?: string; name?: string; demo: boolean };
-type AuthState = { session: Session | null; user: AppUser | null; loading: boolean; roles: Role[]; isStaff: boolean; signOut: () => Promise<void> };
+type AuthState = {
+  user: CurrentUserResponse | null;
+  loading: boolean;
+  isAuthenticated: boolean;
+  sessionUnavailable: boolean;
+  roles: AppRole[];
+  apiRoles: UserRole[];
+  permissions: Permission[];
+  isStaff: boolean;
+  login: (email: string, password: string) => Promise<BffLoginResult>;
+  refreshUser: () => Promise<CurrentUserResponse | null>;
+  signOut: () => Promise<void>;
+};
 
-const AuthContext = createContext<AuthState>({ session: null, user: null, loading: true, roles: [], isStaff: false, signOut: async () => {} });
+const AuthContext = createContext<AuthState>({
+  user: null,
+  loading: true,
+  isAuthenticated: false,
+  sessionUnavailable: false,
+  roles: [],
+  apiRoles: [],
+  permissions: [],
+  isStaff: false,
+  login: async () => {
+    throw new Error("AuthProvider is missing");
+  },
+  refreshUser: async () => null,
+  signOut: async () => {},
+});
+
+async function loadSession(): Promise<{ user: CurrentUserResponse | null; unavailable: boolean }> {
+  try {
+    const user = await bffRestoreSession();
+    return { user, unavailable: false };
+  } catch (error) {
+    const parsed = parseBffError(error);
+    if (isUnavailableAuthError(parsed)) return { user: null, unavailable: true };
+    return { user: null, unavailable: false };
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [demo, setDemo] = useState<DemoSession | null>(null);
+  const [user, setUser] = useState<CurrentUserResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dbRoles, setDbRoles] = useState<Role[]>([]);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
+  const restoreStarted = useRef(false);
 
-  useEffect(() => {
-    const syncDemo = () => setDemo(readDemoUser());
-    syncDemo();
-    window.addEventListener("mm-demo-auth", syncDemo);
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, next) => setSession(next));
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    return () => {
-      window.removeEventListener("mm-demo-auth", syncDemo);
-      sub.subscription.unsubscribe();
-    };
+  const apiRoles = user?.roles ?? [];
+  const roles = useMemo(() => toAppRoles(apiRoles), [apiRoles]);
+  const permissions = user?.permissions ?? [];
+  const isStaff = isStaffRole(roles);
+  const isAuthenticated = user !== null && user.status === "ACTIVE";
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const next = await bffGetCurrentUser();
+      setUser(next);
+      setSessionUnavailable(false);
+      return next;
+    } catch (error) {
+      const parsed = parseBffError(error);
+      if (isUnavailableAuthError(parsed)) {
+        setSessionUnavailable(true);
+        return null;
+      }
+      setUser(null);
+      setSessionUnavailable(false);
+      return null;
+    }
   }, []);
 
   useEffect(() => {
-    if (demo || !session?.user) { setDbRoles([]); return; }
-    supabase.from("user_roles").select("role").eq("user_id", session.user.id).then(({ data }) => {
-      setDbRoles((data ?? []).map((row) => row.role as Role));
-    });
-  }, [demo, session?.user?.id]);
+    if (restoreStarted.current) return;
+    restoreStarted.current = true;
+    void (async () => {
+      const restored = await loadSession();
+      setUser(restored.user);
+      setSessionUnavailable(restored.unavailable);
+      setLoading(false);
+    })();
+  }, []);
 
-  const user: AppUser | null = demo
-    ? { id: demo.id, email: demo.email, name: demo.name, demo: true }
-    : session?.user
-      ? { id: session.user.id, ...(session.user.email ? { email: session.user.email } : {}), demo: false }
-      : null;
-  const roles = demo ? [demo.role] : dbRoles;
-  const isStaff = roles.includes("admin") || roles.includes("facilitator");
+  const login = useCallback(async (email: string, password: string) => {
+    const result = await bffLogin({ data: { email, password } });
+    try {
+      const full = await bffGetCurrentUser();
+      setUser(full);
+    } catch {
+      setUser({
+        ...result.user,
+        permissions: [],
+        location: null,
+        farmerProfile: null,
+        facilitatorProfile: null,
+      });
+    }
+    setSessionUnavailable(false);
+    return result;
+  }, []);
 
-  async function signOut() {
-    signOutDemo();
-    setDemo(null);
-    await supabase.auth.signOut();
-  }
+  const signOut = useCallback(async () => {
+    try {
+      await bffLogout();
+    } finally {
+      setUser(null);
+      setSessionUnavailable(false);
+    }
+  }, []);
 
-  return <AuthContext.Provider value={{ session, user, loading, roles, isStaff, signOut }}>{children}</AuthContext.Provider>;
+  const value: AuthState = {
+    user,
+    loading,
+    isAuthenticated,
+    sessionUnavailable,
+    roles,
+    apiRoles,
+    permissions,
+    isStaff,
+    login,
+    refreshUser,
+    signOut,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

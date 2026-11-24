@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PageHead, useFacilitator } from "@/components/facilitator/shell";
@@ -55,6 +55,12 @@ function SettingsPage() {
         </Panel>
         <Panel title="Notifications">
           <ul className="space-y-2 text-sm">{(Object.keys(notificationLabels) as (keyof NotificationPreferences)[]).map((key) => <li key={key}><label className="flex items-center gap-2"><input type="checkbox" checked={facilitator.notifications[key]} onChange={(event) => { updateFacilitatorProfile(facilitator.id, { notifications: { ...facilitator.notifications, [key]: event.target.checked } }); toast.success("Notification preference saved."); }} />{notificationLabels[key]}</label></li>)}</ul>
+        </Panel>
+        <Panel title="Account security">
+          <p className="text-sm text-muted-foreground">Change your sign-in password. You will sign in again after a successful change.</p>
+          <Button asChild variant="outline" className="mt-3">
+            <Link to="/account/password">Change password</Link>
+          </Button>
         </Panel>
         <Panel title="Demo tools">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={state.config.failNextLoad} onChange={(event) => setMockConfig({ failNextLoad: event.target.checked })} />Make the next page load or generation fail (to see the error state)</label>

@@ -60,7 +60,10 @@ function MePage() {
     <p className="eyebrow mb-2">JYEWE</p>
     <h1 className="text-3xl">{farmer.name}</h1>
     <p className="mt-2 text-muted-foreground">{farmer.phone} · {farmer.district} · {farmer.channel === "smartphone" ? "Telefoni igezweho" : "Telefoni y'ibanze"}</p>
-    <Button asChild variant="outline" className="mt-4"><Link to="/notices">Amamenyesha{resource.data.unread ? ` (${resource.data.unread})` : ""}</Link></Button>
+    <div className="mt-4 flex flex-wrap gap-2">
+      <Button asChild variant="outline"><Link to="/notices">Amamenyesha{resource.data.unread ? ` (${resource.data.unread})` : ""}</Link></Button>
+      <Button asChild variant="outline"><Link to="/account/password">Hindura ijambo ry'ibanga</Link></Button>
+    </div>
     <form className="farmer-form" onSubmit={saveProfile}>
       <h2 className="text-2xl">Umwirondoro</h2>
       <label className="farmer-field">Izina<input value={form.name} onChange={(event) => set("name", event.target.value)} /></label>
