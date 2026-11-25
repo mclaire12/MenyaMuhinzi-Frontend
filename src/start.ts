@@ -1,7 +1,7 @@
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
-import { matchesConfiguredSiteOrigin } from "./lib/site-origin";
+import { isLocalDevOriginPolicy, isSiteOriginAllowed } from "./lib/site-origin";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -23,7 +23,10 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
 // from cross-site requests.
 const csrfMiddleware = createCsrfMiddleware({
   filter: (ctx) => ctx.handlerType === "serverFn",
-  origin: (value) => matchesConfiguredSiteOrigin(value, process.env["SITE_ORIGIN"]),
+  origin: (value) =>
+    isSiteOriginAllowed(value, process.env["SITE_ORIGIN"], {
+      allowLocalDevAliases: isLocalDevOriginPolicy(),
+    }),
 });
 
 // requestMiddleware runs on every request; functionMiddleware only on server functions, where

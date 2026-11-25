@@ -1,7 +1,15 @@
 export const demoAccounts = [
   { id: "demo-farmer", role: "farmer" as const, label: "Umuhinzi", email: "farmer@menyamuhinzi.rw", password: "Muhinzi2026", name: "Mukamana Aline", note: "Kwiga amasomo" },
   { id: "demo-facilitator", role: "facilitator" as const, label: "Umufashamyumvire", email: "facilitator@menyamuhinzi.rw", password: "Muhinzi2026", name: "Habimana Jean", note: "Gucunga amasomo" },
-  { id: "demo-admin", role: "admin" as const, label: "Umuyobozi", email: "admin@menyamuhinzi.rw", password: "Muhinzi2026", name: "Uwase Diane", note: "Kwemeza abakozi" },
+  {
+    id: "demo-admin",
+    role: "admin" as const,
+    label: "Umuyobozi",
+    email: "admin@menyamuhinzi.rw",
+    password: "",
+    name: "Uwase Diane",
+    note: "Ijambo ry'ibanga: SEED_ADMIN_PASSWORD",
+  },
   { id: "demo-basic-phone", role: "basic_phone_farmer" as const, label: "Umuhinzi (telefoni isanzwe)", email: "basicphone@menyamuhinzi.rw", password: "Muhinzi2026", name: "Mukeshimana Vestine", note: "Igerageza USSD/IVR" },
 ];
 

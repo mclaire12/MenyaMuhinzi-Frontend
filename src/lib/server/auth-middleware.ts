@@ -1,11 +1,13 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
-import { matchesConfiguredSiteOrigin } from "../site-origin";
+import { isLocalDevOriginPolicy, isSiteOriginAllowed } from "../site-origin";
 import { getServerRuntimeEnv } from "./runtime-env";
 
 export function isAllowedSiteOrigin(origin: string | undefined): boolean {
   try {
-    return matchesConfiguredSiteOrigin(origin, getServerRuntimeEnv().siteOrigin);
+    return isSiteOriginAllowed(origin, getServerRuntimeEnv().siteOrigin, {
+      allowLocalDevAliases: isLocalDevOriginPolicy(),
+    });
   } catch {
     return !origin;
   }

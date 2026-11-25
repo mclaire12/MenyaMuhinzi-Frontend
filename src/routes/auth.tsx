@@ -87,7 +87,7 @@ function AuthPage() {
           {mode === "in" && (
             <div className="demo-grid" aria-label="Konti z'igerageza">
               <p className="text-xs font-bold text-muted-foreground">
-                Konti z'igerageza · ijambo ry'ibanga: Muhinzi2026
+                Konti z&apos;igerageza — umuyobozi ukoresha ijambo ry&apos;ibanga ryo mu backend .env
               </p>
               {demoAccounts.map((d) => (
                 <button

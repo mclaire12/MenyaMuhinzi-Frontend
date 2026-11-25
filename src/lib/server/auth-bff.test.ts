@@ -294,6 +294,7 @@ describe("origin and CSRF guards", () => {
   it("rejects cross-origin state-changing requests", async () => {
     expect(isAllowedSiteOrigin("https://evil.example")).toBe(false);
     expect(isAllowedSiteOrigin(ENV.SITE_ORIGIN)).toBe(true);
+    expect(isAllowedSiteOrigin("http://172.30.112.1:3000")).toBe(true);
     expect(isAllowedSiteOrigin(undefined)).toBe(true);
   });
 
