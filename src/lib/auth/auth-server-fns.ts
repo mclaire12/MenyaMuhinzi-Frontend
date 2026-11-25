@@ -6,7 +6,7 @@ import { serializeBffAuthFailure } from "@/lib/auth/parse-bff-error";
 export type { BffLoginResult } from "./bff-types";
 
 const loginSchema = z.object({
-  email: z.string().trim().email(),
+  identifier: z.string().trim().min(1),
   password: z.string().min(1),
 });
 
@@ -36,7 +36,7 @@ export const bffLogin = createServerFn({ method: "POST" })
     await guardStateChangingRequest();
     const { loginWithPassword } = await import("@/lib/server/auth-service");
     try {
-      const result = await loginWithPassword(data.email, data.password);
+      const result = await loginWithPassword(data.identifier, data.password);
       assertNoSensitivePayload(result);
       return result;
     } catch (error) {

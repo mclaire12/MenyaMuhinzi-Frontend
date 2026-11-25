@@ -24,6 +24,7 @@ import { Route as AuthenticatedProgressRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthForgotRouteImport } from './routes/auth.forgot'
 import { Route as AuthResetRouteImport } from './routes/auth.reset'
+import { Route as AuthVerifyEmailRouteImport } from './routes/auth.verify-email'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesSlugRouteImport } from './routes/courses.$slug'
 import { Route as AuthenticatedAccountPasswordRouteImport } from './routes/_authenticated/account.password'
@@ -135,6 +136,11 @@ const AuthForgotRoute = AuthForgotRouteImport.update({
 const AuthResetRoute = AuthResetRouteImport.update({
   id: '/reset',
   path: '/reset',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthVerifyEmailRoute = AuthVerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => AuthRoute,
 } as any)
 const CoursesIndexRoute = CoursesIndexRouteImport.update({
@@ -369,6 +375,7 @@ export interface FileRoutesByFullPath {
   '/studio': typeof AuthenticatedStudioRoute
   '/auth/forgot': typeof AuthForgotRoute
   '/auth/reset': typeof AuthResetRoute
+  '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/courses/': typeof CoursesIndexRoute
   '/account/password': typeof AuthenticatedAccountPasswordRoute
@@ -420,6 +427,7 @@ export interface FileRoutesByTo {
   '/studio': typeof AuthenticatedStudioRoute
   '/auth/forgot': typeof AuthForgotRoute
   '/auth/reset': typeof AuthResetRoute
+  '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/courses': typeof CoursesIndexRoute
   '/account/password': typeof AuthenticatedAccountPasswordRoute
@@ -468,6 +476,7 @@ export interface FileRoutesById {
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
   '/auth/forgot': typeof AuthForgotRoute
   '/auth/reset': typeof AuthResetRoute
+  '/auth/verify-email': typeof AuthVerifyEmailRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/courses/': typeof CoursesIndexRoute
   '/_authenticated/account/password': typeof AuthenticatedAccountPasswordRoute
@@ -523,6 +532,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/auth/forgot'
     | '/auth/reset'
+    | '/auth/verify-email'
     | '/courses/$slug'
     | '/courses/'
     | '/account/password'
@@ -574,6 +584,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/auth/forgot'
     | '/auth/reset'
+    | '/auth/verify-email'
     | '/courses/$slug'
     | '/courses'
     | '/account/password'
@@ -621,6 +632,7 @@ export interface FileRouteTypes {
     | '/_authenticated/studio'
     | '/auth/forgot'
     | '/auth/reset'
+    | '/auth/verify-email'
     | '/courses/$slug'
     | '/courses/'
     | '/_authenticated/account/password'
@@ -773,6 +785,13 @@ declare module '@tanstack/react-router' {
       path: '/reset'
       fullPath: '/auth/reset'
       preLoaderRoute: typeof AuthResetRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/verify-email': {
+      id: '/auth/verify-email'
+      path: '/verify-email'
+      fullPath: '/auth/verify-email'
+      preLoaderRoute: typeof AuthVerifyEmailRouteImport
       parentRoute: typeof AuthRoute
     }
     '/courses/': {
@@ -1263,12 +1282,14 @@ const AuthenticatedRouteRouteWithChildren =
 interface AuthRouteChildren {
   AuthForgotRoute: typeof AuthForgotRoute
   AuthResetRoute: typeof AuthResetRoute
+  AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthForgotRoute: AuthForgotRoute,
   AuthResetRoute: AuthResetRoute,
+  AuthVerifyEmailRoute: AuthVerifyEmailRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
 }
 

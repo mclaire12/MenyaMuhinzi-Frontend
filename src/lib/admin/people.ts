@@ -97,7 +97,7 @@ export function registerUser(actor: string, values: UserValues): { error: string
   if (error) return { error };
   const phone = normalizePhone(values.phone);
   if (values.role === "BASIC_PHONE_FARMER") {
-    return registerBasicPhoneFarmer(actor, { ...locationFrom(values), name: values.name, phone, language: values.language === "en" ? "en" : "rw", status: values.status, facilitatorId: values.facilitatorId, cropInterest: values.cropInterest });
+    return registerBasicPhoneFarmer(actor, { ...locationFrom(values), name: values.name, phone, email: values.email, language: values.language === "en" ? "en" : "rw", status: values.status, facilitatorId: values.facilitatorId, cropInterest: values.cropInterest });
   }
   const accountId = `u-${phone}`;
   const at = nowIso();
@@ -125,7 +125,7 @@ export function updateUser(actor: string, accountId: string, values: UserValues)
   if (error) return error;
   const phone = normalizePhone(values.phone);
   if (user.role === "BASIC_PHONE_FARMER" && values.role === "BASIC_PHONE_FARMER") {
-    return updateBasicPhoneFarmer(actor, accountId, { ...locationFrom(values), name: values.name, phone, language: values.language === "en" ? "en" : "rw", status: values.status, facilitatorId: values.facilitatorId, cropInterest: values.cropInterest });
+    return updateBasicPhoneFarmer(actor, accountId, { ...locationFrom(values), name: values.name, phone, email: values.email, language: values.language === "en" ? "en" : "rw", status: values.status, facilitatorId: values.facilitatorId, cropInterest: values.cropInterest });
   }
   updateAdmin(actor, "update-user", accountId, `Updated ${values.name.trim()}${values.role !== user.role ? ` (role ${roleLabels[user.role]} → ${roleLabels[values.role]})` : ""}`, (state) => ({
     ...state,

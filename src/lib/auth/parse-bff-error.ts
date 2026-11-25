@@ -11,7 +11,7 @@ export interface ParsedBffError {
 export function serializeBffAuthFailure(error: {
   code: BffErrorCode;
   message: string;
-  status?: number;
+  status?: number | undefined;
 }): Error {
   const payload = JSON.stringify({
     code: error.code,

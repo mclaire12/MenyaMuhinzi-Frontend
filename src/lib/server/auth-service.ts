@@ -90,8 +90,8 @@ export async function obtainAccessTokenFromSession(): Promise<string> {
   }
 }
 
-export async function loginWithPassword(email: string, password: string): Promise<BffLoginResult> {
-  const created = await client().createWebSession(email, password);
+export async function loginWithPassword(identifier: string, password: string): Promise<BffLoginResult> {
+  const created = await client().createWebSession(identifier, password);
   writeSessionCookie(created.sessionId);
   return {
     user: created.body.user,

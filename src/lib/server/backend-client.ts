@@ -33,6 +33,17 @@ function joinUrl(base: string, path: string): string {
   return `${base}/${path.replace(/^\/+/, "")}`;
 }
 
+function reportRange(query: {
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+}): string {
+  const params = new URLSearchParams();
+  if (query.startDate) params.set("startDate", query.startDate);
+  if (query.endDate) params.set("endDate", query.endDate);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 function headerValue(headers: Headers, name: string): string | undefined {
   const value = headers.get(name);
   return value && value.trim() ? value.trim() : undefined;
@@ -142,10 +153,13 @@ export function createBackendClient(options: BackendClientOptions = {}) {
       return { sessionId, body: payload as WebSessionCreatedBody };
     },
 
-    async createWebSession(email: string, password: string): Promise<{ sessionId: string; body: WebSessionCreatedBody }> {
+    async createWebSession(
+      identifier: string,
+      password: string,
+    ): Promise<{ sessionId: string; body: WebSessionCreatedBody }> {
       const { response, payload } = await request("auth/web-sessions", {
         method: "POST",
-        body: { email, password },
+        body: { identifier, password },
       });
       const sessionId = headerValue(response.headers, WEB_SESSION_HEADER);
       if (!sessionId) {
@@ -154,13 +168,18 @@ export function createBackendClient(options: BackendClientOptions = {}) {
       return { sessionId, body: payload as WebSessionCreatedBody };
     },
 
-    async getWebSessionUser(sessionId: string): Promise<import("../api/types").CurrentUserResponse> {
+    async getWebSessionUser(
+      sessionId: string,
+    ): Promise<import("../api/types").CurrentUserResponse> {
       const { payload } = await request("auth/web-sessions/me", { method: "GET", sessionId });
       return payload as import("../api/types").CurrentUserResponse;
     },
 
     async refreshWebSession(sessionId: string): Promise<WebSessionRefreshResult> {
-      const { response } = await request("auth/web-sessions/refresh", { method: "POST", sessionId });
+      const { response } = await request("auth/web-sessions/refresh", {
+        method: "POST",
+        sessionId,
+      });
       const nextSessionId = headerValue(response.headers, WEB_SESSION_HEADER);
       const accessToken = headerValue(response.headers, ACCESS_TOKEN_HEADER);
       const expiresRaw = headerValue(response.headers, ACCESS_EXPIRES_HEADER);
@@ -186,7 +205,9 @@ export function createBackendClient(options: BackendClientOptions = {}) {
       });
     },
 
-    async forgotPassword(identifier: string): Promise<import("../api/types").ForgotPasswordResponse> {
+    async forgotPassword(
+      identifier: string,
+    ): Promise<import("../api/types").ForgotPasswordResponse> {
       const { payload } = await request("auth/forgot-password", {
         method: "POST",
         body: { identifier },
@@ -199,6 +220,18 @@ export function createBackendClient(options: BackendClientOptions = {}) {
         method: "POST",
         body: { token, newPassword },
       });
+    },
+
+    async verifyEmail(token: string, code: string): Promise<void> {
+      await request("auth/verify-email", { method: "POST", body: { token, code } });
+    },
+
+    async resendVerification(identifier: string): Promise<{ message: string }> {
+      const { payload } = await request("auth/resend-verification", {
+        method: "POST",
+        body: { identifier },
+      });
+      return payload as { message: string };
     },
 
     async listAccountRequests(
@@ -227,6 +260,26 @@ export function createBackendClient(options: BackendClientOptions = {}) {
       return payload as import("../api/account-request-types").AccountRequestResponse;
     },
 
+    /** POST /farmers — administrators register a farmer directly (requires farmers:create). */
+    async createFarmer(
+      accessToken: string,
+      body: import("../api/basic-phone-farmer-types").CreateBasicPhoneFarmerBody,
+    ): Promise<import("../api/basic-phone-farmer-types").CreatedFarmerResponse> {
+      const { payload } = await request("farmers", { method: "POST", body, accessToken });
+      return payload as import("../api/basic-phone-farmer-types").CreatedFarmerResponse;
+    },
+
+    /** POST /accounts/requests — facilitators submit a farmer for administrator approval. */
+    async createAccountRequest(
+      accessToken: string,
+      body: import("../api/basic-phone-farmer-types").CreateBasicPhoneFarmerBody & {
+        notes?: string;
+      },
+    ): Promise<import("../api/account-request-types").AccountRequestResponse> {
+      const { payload } = await request("accounts/requests", { method: "POST", body, accessToken });
+      return payload as import("../api/account-request-types").AccountRequestResponse;
+    },
+
     async approveAccountRequest(
       accessToken: string,
       id: string,
@@ -251,6 +304,100 @@ export function createBackendClient(options: BackendClientOptions = {}) {
         accessToken,
       });
       return payload as import("../api/account-request-types").AccountRequestResponse;
+    },
+
+    /**
+     * Creates an account for Users → Add user: POST /users (administrators),
+     * POST /facilitators or POST /farmers. The backend checks the caller's permissions.
+     */
+    async createAccount(
+      accessToken: string,
+      path: "users" | "facilitators" | "farmers",
+      body:
+        | import("../api/add-user-types").CreateStaffUserBody
+        | import("../api/add-user-types").CreateFacilitatorBody
+        | import("../api/add-user-types").CreateSmartphoneFarmerBody,
+    ): Promise<import("../api/add-user-types").CreatedAccountResponse> {
+      const { payload } = await request(path, { method: "POST", body, accessToken });
+      return payload as import("../api/add-user-types").CreatedAccountResponse;
+    },
+
+    /** GET /users — administrators (users:read). */
+    async listUsers(
+      accessToken: string,
+      query: import("../api/admin-people-types").ListAdminUsersQuery,
+    ): Promise<import("../api/admin-people-types").PaginatedAdminUsers> {
+      const params = new URLSearchParams();
+      if (query.search?.trim()) params.set("search", query.search.trim());
+      if (query.status) params.set("status", query.status);
+      if (query.role) params.set("role", query.role);
+      if (query.page !== undefined) params.set("page", String(query.page));
+      if (query.limit !== undefined) params.set("limit", String(query.limit));
+      const qs = params.toString();
+      const { payload } = await request(`users${qs ? `?${qs}` : ""}`, {
+        method: "GET",
+        accessToken,
+      });
+      return payload as import("../api/admin-people-types").PaginatedAdminUsers;
+    },
+
+    /** GET /users/:id — administrators (users:read). */
+    async getUser(
+      accessToken: string,
+      id: string,
+    ): Promise<import("../api/admin-people-types").AdminUserResponse> {
+      const { payload } = await request(`users/${id}`, { method: "GET", accessToken });
+      return payload as import("../api/admin-people-types").AdminUserResponse;
+    },
+
+    /** PATCH /users/:id/status — administrators (users:manage-status). */
+    async updateUserStatus(
+      accessToken: string,
+      id: string,
+      body: import("../api/admin-people-types").UpdateAdminUserStatusInput,
+    ): Promise<import("../api/admin-people-types").AdminUserResponse> {
+      const { payload } = await request(`users/${id}/status`, {
+        method: "PATCH",
+        body,
+        accessToken,
+      });
+      return payload as import("../api/admin-people-types").AdminUserResponse;
+    },
+
+    /** GET /admin/reports/dashboard — administrators (reports:read). */
+    async getAdminDashboardReport(
+      accessToken: string,
+      query: import("../api/admin-people-types").ReportRangeQuery,
+    ): Promise<import("../api/admin-people-types").AdminDashboardReport> {
+      const { payload } = await request(`admin/reports/dashboard${reportRange(query)}`, {
+        method: "GET",
+        accessToken,
+      });
+      return payload as import("../api/admin-people-types").AdminDashboardReport;
+    },
+
+    /** GET /facilitator/reports/dashboard — facilitators (facilitator-reports:read), own groups only. */
+    async getFacilitatorDashboardReport(
+      accessToken: string,
+      query: import("../api/admin-people-types").ReportRangeQuery,
+    ): Promise<import("../api/facilitator-dashboard-types").FacilitatorDashboardReport> {
+      const { payload } = await request(`facilitator/reports/dashboard${reportRange(query)}`, {
+        method: "GET",
+        accessToken,
+      });
+      return payload as import("../api/facilitator-dashboard-types").FacilitatorDashboardReport;
+    },
+
+    /** GET /admin/reports/registrations — administrators (reports:read). */
+    async getAdminRegistrationsReport(
+      accessToken: string,
+      query: import("../api/admin-people-types").ReportRangeQuery,
+    ): Promise<import("../api/admin-people-types").AdminRegistrationsReport> {
+      const { payload } = await request(`admin/reports/registrations${reportRange(query)}`, {
+        method: "GET",
+        accessToken,
+      });
+      return payload as import("../api/admin-people-types").AdminRegistrationsReport;
     },
 
     /** @internal */

@@ -1,8 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckCircle2, LoaderCircle } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { FACILITATOR_TITLE_OPTIONS } from "@/components/auth/facilitator-titles";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { ResendVerificationForm } from "@/components/auth/resend-verification-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +31,8 @@ const initialValues: RegistrationFormValues = {
   province: "KIGALI_CITY",
   district: "",
   sector: "",
+  cell: "",
+  village: "",
   farmerCategory: "",
   professionalTitle: "",
   organization: "",
@@ -38,6 +42,7 @@ const initialValues: RegistrationFormValues = {
 
 export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
   const [result, setResult] = useState<RegistrationResponse | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [serverErrors, setServerErrors] = useState<string[]>([]);
   const form = useForm<RegistrationFormValues, undefined, RegistrationRequest>({
     resolver: zodResolver(registrationSchema),
@@ -59,6 +64,7 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
   }
 
   if (result) {
+    const emailSent = result.verificationEmailSent === true;
     return (
       <section className="space-y-5 text-center" aria-live="polite">
         <CheckCircle2 className="mx-auto size-12 text-primary" aria-hidden />
@@ -66,12 +72,16 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
           <h2 className="text-2xl font-semibold">
             {result.requiresApproval ? "Ubusabe bwawe bwakiriwe" : "Konti yawe yarafunguwe"}
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">{result.message}</p>
-        </div>
-        {result.requiresApproval && (
-          <p className="rounded-lg border bg-card p-4 text-sm">
-            Konti yawe izakoreshwa nyuma y’uko ubuyobozi bwemeje ubusabe bwawe.
+          <p className="mt-2 text-sm text-muted-foreground">
+            {result.requiresApproval
+              ? "Ubuyobozi buzasuzuma ubusabe bwawe. Nibwemezwa, uzakira email yo kwemeza aderesi yawe; nibwangwa, uzakira email isobanura impamvu."
+              : emailSent
+                ? `Twohereje link yo kwemeza email kuri ${result.user.email ?? "email yawe"}. Yifungure kugira ngo ubashe kwinjira.`
+                : "Konti yafunguwe ariko email yo kwemeza ntiyashoboye koherezwa. Saba indi link hasi aha."}
           </p>
+        </div>
+        {!result.requiresApproval && !emailSent && (
+          <ResendVerificationForm initialIdentifier={result.user.email ?? ""} />
         )}
         {result.accountRequestId && (
           <p className="text-xs text-muted-foreground">
@@ -140,16 +150,13 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
           {...form.register("phoneNumber")}
         />
       </FormField>
-      <FormField
-        label={accountType === "FACILITATOR" ? "Email" : "Email (si ngombwa)"}
-        id="registration-email"
-        error={errors.email?.message}
-      >
+      <FormField label="Email yawe bwite" id="registration-email" error={errors.email?.message}>
         <Input
           id="registration-email"
           type="email"
           autoComplete="email"
           maxLength={254}
+          placeholder="urugero: jeanne@example.rw"
           {...form.register("email")}
         />
       </FormField>
@@ -159,13 +166,25 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
         error={errors.password?.message}
         hint="Nibura inyuguti 8, irimo inyuguti n’umubare."
       >
-        <Input
-          id="registration-password"
-          type="password"
-          autoComplete="new-password"
-          maxLength={128}
-          {...form.register("password")}
-        />
+        <div className="relative">
+          <Input
+            id="registration-password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            maxLength={128}
+            className="pr-12"
+            placeholder="Inyuguti 8 nibura"
+            {...form.register("password")}
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            aria-label={showPassword ? "Hisha ijambo ry'ibanga" : "Garagaza ijambo ry'ibanga"}
+            onClick={() => setShowPassword((value) => !value)}
+          >
+            {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+          </button>
+        </div>
       </FormField>
 
       <div className="space-y-2">
@@ -223,11 +242,47 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
         </div>
       </div>
 
+      <FormField
+        label={accountType === "SMARTPHONE_FARMER" ? "Umurenge" : "Umurenge (si ngombwa)"}
+        id="registration-sector"
+        error={errors.sector?.message}
+      >
+        <Input
+          id="registration-sector"
+          maxLength={80}
+          placeholder="Urugero: Kimironko"
+          {...form.register("sector")}
+        />
+      </FormField>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField
+          label={accountType === "SMARTPHONE_FARMER" ? "Akagari" : "Akagari (si ngombwa)"}
+          id="registration-cell"
+          error={errors.cell?.message}
+        >
+          <Input
+            id="registration-cell"
+            maxLength={80}
+            placeholder="Urugero: Bibare"
+            {...form.register("cell")}
+          />
+        </FormField>
+        <FormField
+          label={accountType === "SMARTPHONE_FARMER" ? "Umudugudu" : "Umudugudu (si ngombwa)"}
+          id="registration-village"
+          error={errors.village?.message}
+        >
+          <Input
+            id="registration-village"
+            maxLength={80}
+            placeholder="Urugero: Imena"
+            {...form.register("village")}
+          />
+        </FormField>
+      </div>
+
       {accountType === "SMARTPHONE_FARMER" ? (
         <>
-          <FormField label="Umurenge" id="registration-sector" error={errors.sector?.message}>
-            <Input id="registration-sector" maxLength={80} {...form.register("sector")} />
-          </FormField>
           <div className="space-y-2">
             <Label htmlFor="registration-category">Icyiciro cy’ubuhinzi</Label>
             <select
@@ -246,17 +301,25 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
         </>
       ) : (
         <>
-          <FormField
-            label="Umwanya w'akazi"
-            id="registration-title"
-            error={errors.professionalTitle?.message}
-          >
-            <Input
+          <div className="space-y-2">
+            <Label htmlFor="registration-title">Umwanya w'akazi</Label>
+            <select
               id="registration-title"
-              maxLength={150}
+              className="h-12 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              aria-invalid={Boolean(errors.professionalTitle)}
               {...form.register("professionalTitle")}
-            />
-          </FormField>
+            >
+              <option value="">Hitamo umwanya w'akazi</option>
+              {FACILITATOR_TITLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {errors.professionalTitle?.message && (
+              <FieldError>{errors.professionalTitle.message}</FieldError>
+            )}
+          </div>
           <FormField
             label="Umuryango cyangwa ikigo ukorera"
             id="registration-organization"
@@ -297,8 +360,8 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
 
       <p className="text-xs text-muted-foreground">
         {accountType === "FACILITATOR"
-          ? "Ubusabe bw’abafashamyumvire busuzumwa n’ubuyobozi mbere yo kwinjira."
-          : "Ubusabe bwawe bushobora gusaba kwemezwa n’ubuyobozi mbere yo kwinjira."}
+          ? "Ubusabe bw’abafashamyumvire bubanza gusuzumwa n’ubuyobozi. Nibwemezwa, uzakira email yo kwemeza aderesi yawe mbere yo kwinjira."
+          : "Nyuma yo kwiyandikisha uzakira email yo kwemeza aderesi yawe. Uzinjira umaze kuyemeza."}
       </p>
       <Button type="submit" size="xl" className="w-full" disabled={form.formState.isSubmitting}>
         {form.formState.isSubmitting && <LoaderCircle className="animate-spin" aria-hidden />}
@@ -383,7 +446,8 @@ function conflictMessage(text: string): string {
     return "Hari ubusabe bwa iyi nimero ya telefoni bugisuzumwa.";
   }
   if (normalized.includes("email address")) return "Iyi email isanzwe yanditse.";
-  if (normalized.includes("phone number already")) return "Iyi nimero ya telefoni isanzwe yanditse.";
+  if (normalized.includes("phone number already"))
+    return "Iyi nimero ya telefoni isanzwe yanditse.";
   return "Iyi email cyangwa nimero ya telefoni isanzwe yanditse cyangwa ifite ubusabe bugisuzumwa.";
 }
 

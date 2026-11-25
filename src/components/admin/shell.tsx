@@ -13,7 +13,7 @@ import { useLearningState } from "@/lib/mock/store";
 
 const links = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { to: "/admin/users", label: "People", icon: Users, exact: false },
+  { to: "/admin/users", label: "Users", icon: Users, exact: false },
   { to: "/admin/groups", label: "Groups", icon: UsersRound, exact: false },
   { to: "/admin/courses", label: "Courses", icon: BookOpen, exact: false },
   { to: "/admin/knowledge", label: "Knowledge Base", icon: Library, exact: false },

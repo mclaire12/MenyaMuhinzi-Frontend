@@ -6,10 +6,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAdmin } from "@/lib/admin/store";
 import { failNext } from "@/lib/basic-phone/answers";
 import { browserVoiceAvailable } from "@/lib/basic-phone/audio";
-import { basicPhoneFarmers, identifyCaller, normalizePhone } from "@/lib/basic-phone/farmers";
+import { basicPhoneFarmers, ensureBasicPhoneTestingProfile, identifyCaller, normalizePhone } from "@/lib/basic-phone/farmers";
 import { courseStanding, enrolledCourses } from "@/lib/basic-phone/progress";
 import { clock, USSD_CODE } from "@/lib/basic-phone/ussd";
-import { basicPhoneTester } from "@/lib/demo-auth";
 import { courseLessons } from "@/lib/mock/builders";
 import { useLearningState } from "@/lib/mock/store";
 
@@ -22,14 +21,16 @@ export const Route = createFileRoute("/_authenticated/phone")({
 const UNREGISTERED = "0789999999";
 
 function PhoneTestPage() {
-  const { roles } = useAuth();
+  const { roles, user } = useAuth();
   const search = Route.useSearch();
   const admin = useAdmin();
   const learning = useLearningState();
   const isAdmin = roles.includes("admin");
   const isTester = roles.includes("basic_phone_farmer");
   const farmers = useMemo(() => basicPhoneFarmers(admin, learning), [admin, learning]);
-  const [selected, setSelected] = useState(() => (isAdmin ? search.phone ?? farmers.find((item) => item.account.status === "active")?.account.phone ?? "" : basicPhoneTester.phone));
+  // A signed-in basic-phone farmer tests with their own registered phone number.
+  const ownPhone = useMemo(() => (isTester && user ? ensureBasicPhoneTestingProfile(user) : ""), [isTester, user]);
+  const [selected, setSelected] = useState(() => (isAdmin ? search.phone ?? farmers.find((item) => item.account.status === "active")?.account.phone ?? "" : ownPhone));
   const [scenario, setScenario] = useState<"farmer" | "missing" | "unregistered" | "custom">("farmer");
   const [custom, setCustom] = useState("");
   const [speed, setSpeed] = useState(10);
@@ -74,7 +75,7 @@ function PhoneTestPage() {
                 </select>
               </label>
             ) : (
-              <p className="sim-note">Mukeshimana Vestine · {basicPhoneTester.phone}</p>
+              <p className="sim-note">{user?.fullName} · {ownPhone}</p>
             )}
             <fieldset className="tool-field">
               <legend>Uko umuhamagaro uza</legend>

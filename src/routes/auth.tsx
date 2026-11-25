@@ -1,17 +1,22 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useChildMatches,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import hero from "@/assets/welcome-garden.webp";
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { useAuth } from "@/hooks/use-auth";
 import { homeForApiRoles } from "@/lib/auth/auth-routing";
-import { loginErrorToast } from "@/lib/auth/login-messages";
+import { isEmailNotVerified, loginErrorToast } from "@/lib/auth/login-messages";
 import { parseBffError } from "@/lib/auth/parse-bff-error";
-import { demoAccounts } from "@/lib/demo-auth";
 import { RegistrationForm } from "@/components/auth/registration-form";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 
@@ -29,11 +34,24 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+/**
+ * /auth is also the parent of /auth/forgot, /auth/reset, /auth/verify-email and
+ * /auth/google/callback; those pages render through the Outlet instead of the login form.
+ */
 function AuthPage() {
+  const childMatches = useChildMatches();
+  return childMatches.length > 0 ? <Outlet /> : <LoginPage />;
+}
+
+function LoginPage() {
   const [mode, setMode] = useState<"in" | "up">("in");
   const [busy, setBusy] = useState(false);
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState<{ message: string; unverified: boolean } | null>(
+    null,
+  );
   const { user, apiRoles, isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
 
@@ -44,13 +62,17 @@ function AuthPage() {
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    const email = String(f.get("email"));
+    const identifier = String(f.get("identifier"));
     const password = String(f.get("password"));
     setBusy(true);
+    setLoginError(null);
     try {
-      await login(email, password);
+      await login(identifier, password);
     } catch (error) {
-      toast.error(loginErrorToast(parseBffError(error)));
+      const parsed = parseBffError(error);
+      const message = loginErrorToast(parsed);
+      setLoginError({ message, unverified: isEmailNotVerified(parsed) });
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -84,44 +106,22 @@ function AuthPage() {
           <p className="mb-6 text-muted-foreground">
             {mode === "in" ? "Komeza kwiga aho wari ugeze." : "Fungura konti ya MenyaMuhinzi."}
           </p>
-          {mode === "in" && (
-            <div className="demo-grid" aria-label="Konti z'igerageza">
-              <p className="text-xs font-bold text-muted-foreground">
-                Konti z&apos;igerageza — umuyobozi ukoresha ijambo ry&apos;ibanga ryo mu backend .env
-              </p>
-              {demoAccounts.map((d) => (
-                <button
-                  key={d.email}
-                  type="button"
-                  className="demo-card"
-                  onClick={() => {
-                    setEmail(d.email);
-                    setPassword(d.password);
-                  }}
-                >
-                  <Logo className="size-8" />
-                  <span className="min-w-0">
-                    <b>{d.label}</b>
-                    <small>{d.email}</small>
-                  </span>
-                  <span className="text-xs font-bold text-primary">{d.note}</span>
-                </button>
-              ))}
-            </div>
-          )}
           {mode === "in" ? (
             <>
               <form method="post" onSubmit={submit} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="identifier">Email cyangwa nimero ya telefoni</Label>
                   <Input
-                    id="email"
-                    name="email"
-                    type="email"
+                    id="identifier"
+                    name="identifier"
+                    type="text"
+                    inputMode="email"
                     required
                     className="h-12"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jeanne@example.rw cyangwa 0788123456"
+                    autoComplete="username"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
@@ -134,17 +134,48 @@ function AuthPage() {
                       Wibagiwe?
                     </Link>
                   </div>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    minLength={6}
-                    required
-                    className="h-12"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      minLength={6}
+                      required
+                      className="h-12 pr-12"
+                      placeholder="Andika ijambo ry'ibanga"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      aria-label={
+                        showPassword ? "Hisha ijambo ry'ibanga" : "Garagaza ijambo ry'ibanga"
+                      }
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword((value) => !value)}
+                    >
+                      {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                    </button>
+                  </div>
                 </div>
+                {loginError && (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"
+                  >
+                    <p>{loginError.message}</p>
+                    {loginError.unverified && (
+                      <Link
+                        to="/auth/verify-email"
+                        className="mt-1 inline-block font-bold text-primary underline underline-offset-4"
+                      >
+                        Saba indi link yo kwemeza email
+                      </Link>
+                    )}
+                  </div>
+                )}
                 <Button type="submit" size="xl" className="w-full" disabled={busy}>
                   {busy && <LoaderCircle className="animate-spin" aria-hidden />}Injira
                   {!busy && <ArrowRight aria-hidden />}

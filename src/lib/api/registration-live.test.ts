@@ -11,20 +11,22 @@ function phone(prefix: "078" | "079", slot: number): string {
   return `${prefix}${stamp}${slot}`;
 }
 
-function farmer(slot: number, email?: string): RegistrationRequest {
+function farmer(slot: number, email = `farmer${stamp}${slot}@example.rw`): RegistrationRequest {
   return {
     accountType: "SMARTPHONE_FARMER",
     fullName: "Stage Two Farmer",
     phoneNumber: phone("078", slot),
+    email,
     password: "Umuhinzi2026",
     preferredLanguage: "rw",
     location: {
       province: "NORTHERN",
       district: "Musanze",
       sector: "Muhoza",
+      cell: "Ruhengeri",
+      village: "Kigombe",
     },
     farmerCategory: "SMALLHOLDER",
-    ...(email ? { email } : {}),
   };
 }
 

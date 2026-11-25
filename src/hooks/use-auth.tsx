@@ -28,7 +28,7 @@ type AuthState = {
   apiRoles: UserRole[];
   permissions: Permission[];
   isStaff: boolean;
-  login: (email: string, password: string) => Promise<BffLoginResult>;
+  login: (identifier: string, password: string) => Promise<BffLoginResult>;
   refreshUser: () => Promise<CurrentUserResponse | null>;
   signOut: () => Promise<void>;
 };
@@ -101,8 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await bffLogin({ data: { email, password } });
+  const login = useCallback(async (identifier: string, password: string) => {
+    const result = await bffLogin({ data: { identifier, password } });
     try {
       const full = await bffGetCurrentUser();
       setUser(full);

@@ -70,6 +70,7 @@ export function rememberLanguage(caller: Caller, language: PhoneLanguage) {
 export type BasicPhoneFarmerValues = Location & {
   name: string;
   phone: string;
+  email: string;
   language: PhoneLanguage;
   status: AccountStatus;
   facilitatorId: string;
@@ -94,7 +95,7 @@ export function registerBasicPhoneFarmer(actor: string, values: BasicPhoneFarmer
   const location = { province: values.province, district: values.district, sector: values.sector.trim(), cell: values.cell.trim(), village: values.village.trim() };
   updateAdmin(actor, "create-user", accountId, `Registered basic-phone farmer ${values.name.trim()}`, (state) => ({
     ...state,
-    users: [{ id: accountId, name: values.name.trim(), phone, email: "", district: values.district, language: values.language, channel: "basic_phone", role: "BASIC_PHONE_FARMER", status: values.status, registeredAt: nowIso(), lastActiveAt: nowIso(), qualification: "", verified: false, groupId: "", enrollments: [], notes: [] }, ...state.users],
+    users: [{ id: accountId, name: values.name.trim(), phone, email: values.email.trim(), district: values.district, language: values.language, channel: "basic_phone", role: "BASIC_PHONE_FARMER", status: values.status, registeredAt: nowIso(), lastActiveAt: nowIso(), qualification: "", verified: false, groupId: "", enrollments: [], notes: [] }, ...state.users],
   }));
   mutate((state) => {
     const existing = state.farmers.find((farmer) => samePhone(farmer.phone, phone));
@@ -108,6 +109,46 @@ export function registerBasicPhoneFarmer(actor: string, values: BasicPhoneFarmer
     return { ...state, farmers, settings };
   });
   return { accountId };
+}
+
+const PROVINCE_LABELS: Record<string, string> = {
+  KIGALI_CITY: "Kigali City",
+  NORTHERN: "Northern Province",
+  SOUTHERN: "Southern Province",
+  EASTERN: "Eastern Province",
+  WESTERN: "Western Province",
+};
+
+/**
+ * The phone simulator reads the local testing store. A basic-phone farmer who signed in with a
+ * real backend account gets a matching local testing profile (same phone, name, email and
+ * address) so the USSD/IVR learning flow can be exercised. Returns the normalised phone.
+ */
+export function ensureBasicPhoneTestingProfile(user: {
+  fullName: string;
+  phoneNumber: string;
+  email: string | null;
+  preferredLanguage: string;
+  location: { province: string; district: string; sector: string | null; cell: string | null; village: string | null } | null;
+}): string {
+  const phone = normalizePhone(user.phoneNumber);
+  if (getAdminState().users.some((account) => samePhone(account.phone, phone))) return phone;
+  const facilitatorId = getLearningState().facilitators[0]?.id ?? "fac1";
+  registerBasicPhoneFarmer("self", {
+    name: user.fullName,
+    phone,
+    email: user.email ?? "",
+    language: user.preferredLanguage === "en" ? "en" : "rw",
+    status: "active",
+    facilitatorId,
+    cropInterest: ["tomato"],
+    province: PROVINCE_LABELS[user.location?.province ?? ""] ?? "Kigali City",
+    district: user.location?.district ?? "Gasabo",
+    sector: user.location?.sector || "—",
+    cell: user.location?.cell || "—",
+    village: user.location?.village || "—",
+  });
+  return phone;
 }
 
 export function updateBasicPhoneFarmer(actor: string, accountId: string, values: BasicPhoneFarmerValues) {

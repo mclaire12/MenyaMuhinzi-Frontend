@@ -13,9 +13,10 @@ const request: RegistrationRequest = {
   accountType: "SMARTPHONE_FARMER",
   fullName: "Uwimana Jeanne",
   phoneNumber: "+250788123456",
+  email: "jeanne@example.rw",
   password: "Umuhinzi2026",
   preferredLanguage: "rw",
-  location: { province: "NORTHERN", district: "Musanze", sector: "Muhoza" },
+  location: { province: "NORTHERN", district: "Musanze", sector: "Muhoza", cell: "Ruhengeri", village: "Kigombe" },
   farmerCategory: "SMALLHOLDER",
 };
 

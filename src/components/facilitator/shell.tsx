@@ -6,6 +6,7 @@ import { HeaderAlerts } from "@/components/header-alerts";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useAdmin } from "@/lib/admin/store";
+import { facilitatorFromAccount } from "@/lib/facilitator/dashboard";
 import { useLearningState } from "@/lib/mock/store";
 import { facilitatorForAccount } from "@/lib/mock/services/facilitators";
 import { facilitatorAttention } from "@/lib/mock/services/group-progress";
@@ -45,7 +46,8 @@ export function FacilitatorLayout() {
   if (!roles.includes("facilitator")) {
     return <div className="page-width py-16"><h1 className="text-3xl">Facilitators only</h1><p className="mt-2 text-muted-foreground">Sign in with facilitator@menyamuhinzi.rw to open the Facilitator Portal.</p></div>;
   }
-  const facilitator = facilitatorForAccount(state, user?.id);
+  // Accounts created in the backend have no demo record; their profile comes from the session.
+  const facilitator = facilitatorForAccount(state, user?.id) ?? (user ? facilitatorFromAccount(user) : null);
   if (!facilitator) {
     return <div className="page-width py-16"><h1 className="text-3xl">No facilitator profile</h1><p className="mt-2 text-muted-foreground">This account has the facilitator role but no profile in the demo data yet.</p></div>;
   }

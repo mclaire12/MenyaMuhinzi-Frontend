@@ -14,8 +14,8 @@ type ResetSearch = { token?: string };
 
 export const Route = createFileRoute("/auth/reset")({
   validateSearch: (search: Record<string, unknown>): ResetSearch => ({
-    ...(typeof search.token === "string" && search.token.trim()
-      ? { token: search.token.trim() }
+    ...(typeof search["token"] === "string" && search["token"].trim()
+      ? { token: search["token"].trim() }
       : {}),
   }),
   head: () => ({
@@ -32,7 +32,7 @@ function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const token = search.token ?? "";
+  const token = search["token"] ?? "";
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

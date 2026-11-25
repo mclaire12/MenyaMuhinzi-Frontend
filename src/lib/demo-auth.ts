@@ -1,20 +1,15 @@
+/**
+ * Legacy local-demo identities. The public login page no longer shows or accepts demo
+ * credentials; real users sign in through the BFF. Only ids/roles remain so that an old
+ * browser session stored under USER_KEY can still be recognised (and cleared) by the mock
+ * learning store. No emails or passwords are kept here.
+ */
 export const demoAccounts = [
-  { id: "demo-farmer", role: "farmer" as const, label: "Umuhinzi", email: "farmer@menyamuhinzi.rw", password: "Muhinzi2026", name: "Mukamana Aline", note: "Kwiga amasomo" },
-  { id: "demo-facilitator", role: "facilitator" as const, label: "Umufashamyumvire", email: "facilitator@menyamuhinzi.rw", password: "Muhinzi2026", name: "Habimana Jean", note: "Gucunga amasomo" },
-  {
-    id: "demo-admin",
-    role: "admin" as const,
-    label: "Umuyobozi",
-    email: "admin@menyamuhinzi.rw",
-    password: "",
-    name: "Uwase Diane",
-    note: "Ijambo ry'ibanga: SEED_ADMIN_PASSWORD",
-  },
-  { id: "demo-basic-phone", role: "basic_phone_farmer" as const, label: "Umuhinzi (telefoni isanzwe)", email: "basicphone@menyamuhinzi.rw", password: "Muhinzi2026", name: "Mukeshimana Vestine", note: "Igerageza USSD/IVR" },
+  { id: "demo-farmer", role: "farmer" as const, label: "Umuhinzi", name: "Mukamana Aline" },
+  { id: "demo-facilitator", role: "facilitator" as const, label: "Umufashamyumvire", name: "Habimana Jean" },
+  { id: "demo-admin", role: "admin" as const, label: "Umuyobozi", name: "Uwase Diane" },
+  { id: "demo-basic-phone", role: "basic_phone_farmer" as const, label: "Umuhinzi (telefoni isanzwe)", name: "Mukeshimana Vestine" },
 ];
-
-/** The basic-phone farmer never uses a web portal; this login only opens the testing phone. */
-export const basicPhoneTester = { accountId: "demo-basic-phone", phone: "0788555100" };
 
 export const homeFor = (role: DemoRole | undefined) => (role === "basic_phone_farmer" ? "/phone" : "/dashboard");
 
@@ -35,15 +30,6 @@ export function readDemoUser(): DemoSession | null {
   } catch {
     return null;
   }
-}
-
-export function signInDemo(email: string, password: string) {
-  const account = demoAccounts.find((item) => item.email === email.trim().toLowerCase() && item.password === password);
-  if (!account) return null;
-  const session: DemoSession = { id: account.id, email: account.email, role: account.role, name: account.name, label: account.label };
-  localStorage.setItem(USER_KEY, JSON.stringify(session));
-  window.dispatchEvent(new Event("mm-demo-auth"));
-  return session;
 }
 
 export function signOutDemo() {

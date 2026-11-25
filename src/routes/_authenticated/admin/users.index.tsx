@@ -1,34 +1,18 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Download, UserPlus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Download } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  formatDate,
-  PageHead,
-  Pill,
-  RowMenu,
-  Tabs,
-  useAdminActor,
-  withinDays,
-} from "@/components/admin/shell";
+import { formatDate, PageHead, Pill, RowMenu, Tabs } from "@/components/admin/shell";
 import {
   AccountRequestApproveDialog,
   AccountRequestRejectDialog,
-  RejectDialog,
-  statusTone,
   type AccountRequestDecisionTarget,
 } from "@/components/admin/people-ui";
-import { UserForm } from "@/components/admin/user-form";
-import { ConfirmDialog } from "@/components/facilitator/ui";
+import { AddUserDialog } from "@/components/admin/add-user-dialog";
+import { BasicPhoneFarmerDialog } from "@/components/admin/basic-phone-farmer-dialog";
+import { UserStatusDialog, type UserStatusChange } from "@/components/admin/user-status-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { accountRequestDetailLink } from "@/lib/admin/account-request-detail";
 import {
@@ -41,76 +25,57 @@ import {
 } from "@/lib/admin/account-request-approvals";
 import type { ApprovalsView } from "@/lib/admin/account-request-mapper";
 import {
-  accountStatusLabels,
-  approveUser,
-  emptyUser,
-  locationOf,
-  registerUser,
-  roleLabels,
-  setUserStatus,
-} from "@/lib/admin/people";
-import { downloadCsv, useAdmin } from "@/lib/admin/store";
-import type { AccountStatus, PortalRole, PortalUser } from "@/lib/admin/types";
-import type { UserRole } from "@/lib/api/types";
-import { normalizePhone } from "@/lib/basic-phone/farmers";
+  adminUserListQueryOptions,
+  backendRoleLabels,
+  backendStatusLabels,
+  backendStatusTone,
+  locationLabel,
+  manageableActions,
+  rolesLabel,
+  statusActionCopy,
+} from "@/lib/admin/backend-people";
+import { roleLabels } from "@/lib/admin/people";
+import { downloadCsv } from "@/lib/admin/store";
+import type { AdminUserResponse, ListAdminUsersQuery } from "@/lib/api/admin-people-types";
+import type { AccountStatus, UserRole } from "@/lib/api/types";
+import { bffListUsers } from "@/lib/auth/admin-people-server-fns";
+import { parseBffError } from "@/lib/auth/parse-bff-error";
 import { useAccountRequestDecisions } from "@/hooks/use-account-request-decisions";
 import { useAuth } from "@/hooks/use-auth";
 import type { AccountRequestApprovalRow } from "@/lib/admin/account-request-mapper";
-import { provinces } from "@/lib/mock/crops";
-import { useLearningState } from "@/lib/mock/store";
 
-type Search = { tab?: "users" | "approvals"; create?: boolean };
+type Search = { tab?: "users" | "approvals" };
 
 export const Route = createFileRoute("/_authenticated/admin/users/")({
-  validateSearch: (search: Record<string, unknown>): Search => ({
-    ...(search["tab"] === "approvals" || search["tab"] === "users" ? { tab: search["tab"] } : {}),
-    ...(search["create"] === true || search["create"] === "true" ? { create: true } : {}),
-  }),
+  validateSearch: (search: Record<string, unknown>): Search =>
+    search["tab"] === "approvals" || search["tab"] === "users" ? { tab: search["tab"] } : {},
   component: People,
 });
 
 const PAGE = 10;
-const roles: PortalRole[] = ["ADMIN", "FACILITATOR", "SMARTPHONE_FARMER", "BASIC_PHONE_FARMER"];
+const roles: UserRole[] = ["ADMIN", "FACILITATOR", "SMARTPHONE_FARMER", "BASIC_PHONE_FARMER"];
 const approvalRoles: UserRole[] = ["FACILITATOR", "SMARTPHONE_FARMER", "BASIC_PHONE_FARMER"];
 
 function People() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/admin/users/" });
   const tab = search.tab ?? "users";
-  const data = useAdmin();
-  const learning = useLearningState();
-  const { name } = useAdminActor();
   const { permissions, loading: authLoading } = useAuth();
   const canReadApprovals = permissions.includes("account-requests:read");
+  const canReadUsers = permissions.includes("users:read");
   const pendingCountQuery = useQuery(
     accountRequestStatusCountQueryOptions("PENDING", canReadApprovals && !authLoading),
   );
   const pendingBadge = canReadApprovals ? pendingCountQuery.data : undefined;
-  const [creating, setCreating] = useState(!!search.create);
-
-  function register(values: Parameters<typeof registerUser>[1]) {
-    const result = registerUser(name, values);
-    if ("error" in result) return result.error;
-    setCreating(false);
-    toast.success(
-      values.role === "BASIC_PHONE_FARMER"
-        ? "Basic-phone farmer registered. They learn by USSD and IVR only."
-        : `${roleLabels[values.role]} registered.`,
-    );
-    navigate({ to: "/admin/users/$userId", params: { userId: result.accountId } });
-    return null;
-  }
 
   return (
     <>
       <PageHead
-        title="People"
-        text="Every account on the platform. Farmers are one record whether they learn on a smartphone or by USSD and IVR."
+        title="Users"
+        text="Every account registered on the platform, read live from the database. Farmers are one record whether they learn on a smartphone or by USSD and IVR."
       >
-        <Button onClick={() => setCreating(true)}>
-          <UserPlus aria-hidden />
-          Add user
-        </Button>
+        <AddUserDialog />
+        <BasicPhoneFarmerDialog />
       </PageHead>
       <Tabs
         value={tab}
@@ -124,120 +89,81 @@ function People() {
         ]}
       />
       {tab === "users" ? (
-        <UsersTable users={data.users} learning={learning} />
+        <UsersTable canRead={canReadUsers} authLoading={authLoading} />
       ) : (
         <Approvals canRead={canReadApprovals} authLoading={authLoading} />
       )}
-      <Dialog
-        open={creating}
-        onOpenChange={(open) => {
-          setCreating(open);
-          if (!open && search.create) navigate({ search: { tab } });
-        }}
-      >
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add a user</DialogTitle>
-            <DialogDescription>
-              The form changes with the user type. Phone numbers must be unique, so no farmer is
-              registered twice.
-            </DialogDescription>
-          </DialogHeader>
-          <UserForm
-            initial={emptyUser("SMARTPHONE_FARMER", data.platform.defaultLanguage)}
-            roles={roles}
-            submitLabel="Register user"
-            onSubmit={register}
-            onCancel={() => setCreating(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
 
-type StatusChange = { user: PortalUser; status: AccountStatus } | null;
+const statuses: AccountStatus[] = ["ACTIVE", "PENDING", "SUSPENDED", "INACTIVE", "REJECTED"];
 
-const statusCopy: Partial<Record<AccountStatus, { title: string; text: string; label: string }>> = {
-  active: {
-    title: "Activate this account?",
-    text: "The user can sign in, or dial in by USSD and IVR, again.",
-    label: "Activate",
-  },
-  suspended: {
-    title: "Suspend this account?",
-    text: "The user is blocked until an administrator activates the account again. Learning records are kept.",
-    label: "Suspend",
-  },
-  deactivated: {
-    title: "Deactivate this account?",
-    text: "The account becomes inactive and cannot be used. Learning records are kept.",
-    label: "Deactivate",
-  },
-};
-
-function UsersTable({
-  users,
-  learning,
-}: {
-  users: PortalUser[];
-  learning: ReturnType<typeof useLearningState>;
-}) {
-  const { name } = useAdminActor();
+function UsersTable({ canRead, authLoading }: { canRead: boolean; authLoading: boolean }) {
+  const { user: me, permissions } = useAuth();
+  const canManageStatus = permissions.includes("users:manage-status");
   const [query, setQuery] = useState("");
-  const [role, setRole] = useState<PortalRole | "all">("all");
+  const [debounced, setDebounced] = useState("");
+  const [role, setRole] = useState<UserRole | "all">("all");
   const [status, setStatus] = useState<AccountStatus | "all">("all");
-  const [province, setProvince] = useState("all");
-  const [district, setDistrict] = useState("all");
-  const [registered, setRegistered] = useState(0);
-  const [page, setPage] = useState(0);
-  const [change, setChange] = useState<StatusChange>(null);
-  const [rejecting, setRejecting] = useState<PortalUser | null>(null);
-  const rows = useMemo(
-    () =>
-      users
-        .map((user) => ({ user, location: locationOf(learning, user) }))
-        .filter(({ user, location }) => {
-          const text = query.trim().toLowerCase();
-          const digits = /\d/.test(text) ? normalizePhone(text) : "";
-          if (
-            text &&
-            !`${user.name} ${user.email} ${user.phone} ${location.sector} ${location.village}`
-              .toLowerCase()
-              .includes(text) &&
-            !(digits && normalizePhone(user.phone).includes(digits))
-          )
-            return false;
-          if (role !== "all" && user.role !== role) return false;
-          if (status !== "all" && user.status !== status) return false;
-          if (province !== "all" && location.province !== province) return false;
-          if (district !== "all" && location.district !== district) return false;
-          if (registered && !withinDays(user.registeredAt, registered)) return false;
-          return true;
-        })
-        .sort((a, b) => b.user.registeredAt.localeCompare(a.user.registeredAt)),
-    [users, learning, query, role, status, province, district, registered],
-  );
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
-  const visible = rows.slice(page * PAGE, page * PAGE + PAGE);
-  const reset = () => setPage(0);
+  const [page, setPage] = useState(1);
+  const [change, setChange] = useState<UserStatusChange>(null);
+  const [exporting, setExporting] = useState(false);
 
-  function exportRows() {
-    downloadCsv(
-      "menyamuhinzi-users.csv",
-      rows.map(({ user, location }) => ({
-        name: user.name,
-        phone: user.phone,
-        email: user.email,
-        role: roleLabels[user.role],
-        province: location.province,
-        district: location.district,
-        status: accountStatusLabels[user.status],
-        registered: user.registeredAt.slice(0, 10),
-      })),
-    );
-    toast.success(`${rows.length} user(s) exported.`);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const filters: ListAdminUsersQuery = {
+    ...(debounced ? { search: debounced } : {}),
+    ...(role !== "all" ? { role } : {}),
+    ...(status !== "all" ? { status } : {}),
+  };
+  const list = useQuery(
+    adminUserListQueryOptions({ ...filters, page, limit: PAGE }, canRead && !authLoading),
+  );
+  const rows = list.data?.data ?? [];
+  const meta = list.data?.meta;
+  const totalPages = Math.max(1, meta?.totalPages ?? 1);
+  const reset = () => setPage(1);
+
+  async function exportRows() {
+    setExporting(true);
+    try {
+      const all: AdminUserResponse[] = [];
+      for (let next = 1; next <= 50; next += 1) {
+        const result = await bffListUsers({ data: { ...filters, page: next, limit: 100 } });
+        all.push(...result.data);
+        if (next >= result.meta.totalPages) break;
+      }
+      downloadCsv(
+        "menyamuhinzi-users.csv",
+        all.map((user) => ({
+          name: user.fullName,
+          phone: user.phoneNumber,
+          email: user.email ?? "",
+          emailVerified: user.emailVerifiedAt ? "yes" : "no",
+          roles: rolesLabel(user),
+          province: user.location?.province ?? "",
+          district: user.location?.district ?? "",
+          sector: user.location?.sector ?? "",
+          status: backendStatusLabels[user.status],
+          registered: user.createdAt.slice(0, 10),
+          lastLogin: user.lastLoginAt?.slice(0, 10) ?? "",
+        })),
+      );
+      toast.success(`${all.length} user(s) exported.`);
+    } catch {
+      toast.error("The user list could not be exported. Try again.");
+    } finally {
+      setExporting(false);
+    }
   }
+
+  if (authLoading) return <p className="fac-empty">Loading users…</p>;
+  if (!canRead)
+    return <p className="fac-empty">You do not have permission to view user accounts.</p>;
 
   return (
     <>
@@ -255,14 +181,14 @@ function UsersTable({
           aria-label="Role"
           value={role}
           onChange={(event) => {
-            setRole(event.target.value as PortalRole | "all");
+            setRole(event.target.value as UserRole | "all");
             reset();
           }}
         >
           <option value="all">All roles</option>
           {roles.map((item) => (
             <option key={item} value={item}>
-              {roleLabels[item]}
+              {backendRoleLabels[item]}
             </option>
           ))}
         </select>
@@ -275,64 +201,39 @@ function UsersTable({
           }}
         >
           <option value="all">All statuses</option>
-          {(Object.keys(accountStatusLabels) as AccountStatus[]).map((item) => (
+          {statuses.map((item) => (
             <option key={item} value={item}>
-              {accountStatusLabels[item]}
+              {backendStatusLabels[item]}
             </option>
           ))}
         </select>
-        <select
-          aria-label="Province"
-          value={province}
-          onChange={(event) => {
-            setProvince(event.target.value);
-            setDistrict("all");
-            reset();
-          }}
+        <Button
+          variant="outline"
+          disabled={!meta?.total || exporting}
+          onClick={() => void exportRows()}
         >
-          <option value="all">All provinces</option>
-          {Object.keys(provinces).map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-        <select
-          aria-label="District"
-          value={district}
-          onChange={(event) => {
-            setDistrict(event.target.value);
-            reset();
-          }}
-        >
-          <option value="all">All districts</option>
-          {(province === "all" ? Object.values(provinces).flat() : (provinces[province] ?? [])).map(
-            (item) => (
-              <option key={item}>{item}</option>
-            ),
-          )}
-        </select>
-        <select
-          aria-label="Registration date"
-          value={registered}
-          onChange={(event) => {
-            setRegistered(Number(event.target.value));
-            reset();
-          }}
-        >
-          <option value={0}>Registered any time</option>
-          <option value={7}>Last 7 days</option>
-          <option value={30}>Last 30 days</option>
-          <option value={90}>Last 90 days</option>
-        </select>
-        <Button variant="outline" disabled={!rows.length} onClick={exportRows}>
           <Download aria-hidden />
-          Export CSV
+          {exporting ? "Exporting…" : "Export CSV"}
         </Button>
       </div>
-      {!rows.length ? (
+      {list.isError ? (
+        <div className="fac-empty" role="alert">
+          <p>
+            {parseBffError(list.error).status === 401
+              ? "Your session has expired. Sign in again to see user accounts."
+              : "User accounts could not be loaded from the server."}
+          </p>
+          <Button className="mt-3" variant="outline" onClick={() => void list.refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : list.isLoading ? (
+        <p className="fac-empty">Loading users…</p>
+      ) : !rows.length ? (
         <p className="fac-empty">No users match these filters.</p>
       ) : (
         <>
-          <div className="staff-table">
+          <div className="staff-table" aria-busy={list.isFetching}>
             <table className="w-full text-sm">
               <thead>
                 <tr>
@@ -347,89 +248,71 @@ function UsersTable({
                 </tr>
               </thead>
               <tbody>
-                {visible.map(({ user, location }) => (
-                  <tr key={user.id}>
-                    <td>
-                      <Link
-                        className="font-bold"
-                        to="/admin/users/$userId"
-                        params={{ userId: user.id }}
-                      >
-                        {user.name}
-                      </Link>
-                    </td>
-                    <td>{user.phone}</td>
-                    <td>{user.email || <span className="text-muted-foreground">—</span>}</td>
-                    <td>{roleLabels[user.role]}</td>
-                    <td>
-                      {[location.district, location.province].filter(Boolean).join(", ") || "—"}
-                    </td>
-                    <td>
-                      <Pill tone={statusTone(user.status)}>{accountStatusLabels[user.status]}</Pill>
-                    </td>
-                    <td>{formatDate(user.registeredAt)}</td>
-                    <td className="col-actions">
-                      <RowMenu label={user.name}>
-                        <DropdownMenuItem asChild>
-                          <Link to="/admin/users/$userId" params={{ userId: user.id }}>
-                            View details
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link
-                            to="/admin/users/$userId"
-                            params={{ userId: user.id }}
-                            search={{ edit: true }}
-                          >
-                            Edit
-                          </Link>
-                        </DropdownMenuItem>
-                        {user.status === "pending" && (
+                {rows.map((user) => {
+                  const actions =
+                    canManageStatus && user.id !== me?.id ? manageableActions(user.status) : [];
+                  return (
+                    <tr key={user.id}>
+                      <td>
+                        <Link
+                          className="font-bold"
+                          to="/admin/users/$userId"
+                          params={{ userId: user.id }}
+                        >
+                          {user.fullName}
+                        </Link>
+                      </td>
+                      <td>{user.phoneNumber}</td>
+                      <td>
+                        {user.email ? (
                           <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                const error = approveUser(name, user.id);
-                                if (error) toast.error(error);
-                                else
-                                  toast.success(
-                                    `${user.name} approved. The account is now active.`,
-                                  );
-                              }}
-                            >
-                              Approve
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setRejecting(user)}>
-                              Reject
-                            </DropdownMenuItem>
+                            {user.email}
+                            {!user.emailVerifiedAt && (
+                              <span className="block text-xs text-muted-foreground">
+                                Not verified
+                              </span>
+                            )}
                           </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
-                        {user.status !== "pending" && user.status !== "rejected" && (
-                          <DropdownMenuSeparator />
-                        )}
-                        {(user.status === "suspended" || user.status === "deactivated") && (
-                          <DropdownMenuItem onSelect={() => setChange({ user, status: "active" })}>
-                            Activate
+                      </td>
+                      <td>{rolesLabel(user)}</td>
+                      <td>{locationLabel(user)}</td>
+                      <td>
+                        <Pill tone={backendStatusTone(user.status)}>
+                          {backendStatusLabels[user.status]}
+                        </Pill>
+                      </td>
+                      <td>{formatDate(user.createdAt)}</td>
+                      <td className="col-actions">
+                        <RowMenu label={user.fullName}>
+                          <DropdownMenuItem asChild>
+                            <Link to="/admin/users/$userId" params={{ userId: user.id }}>
+                              View details
+                            </Link>
                           </DropdownMenuItem>
-                        )}
-                        {user.status === "active" && (
-                          <DropdownMenuItem
-                            onSelect={() => setChange({ user, status: "suspended" })}
-                          >
-                            Suspend
-                          </DropdownMenuItem>
-                        )}
-                        {(user.status === "active" || user.status === "suspended") && (
-                          <DropdownMenuItem
-                            onSelect={() => setChange({ user, status: "deactivated" })}
-                          >
-                            Deactivate
-                          </DropdownMenuItem>
-                        )}
-                      </RowMenu>
-                    </td>
-                  </tr>
-                ))}
+                          {user.status === "PENDING" && (
+                            <DropdownMenuItem asChild>
+                              <Link to="/admin/users" search={{ tab: "approvals" }}>
+                                Review in account approvals
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+                          {actions.length > 0 && <DropdownMenuSeparator />}
+                          {actions.map((next) => (
+                            <DropdownMenuItem
+                              key={next}
+                              onSelect={() => setChange({ user, status: next })}
+                            >
+                              {statusActionCopy[next].label}
+                            </DropdownMenuItem>
+                          ))}
+                        </RowMenu>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -437,18 +320,18 @@ function UsersTable({
             <Button
               size="sm"
               variant="outline"
-              disabled={page === 0}
+              disabled={page <= 1}
               onClick={() => setPage(page - 1)}
             >
               Previous
             </Button>
             <span className="text-sm">
-              Page {page + 1} of {pages} · {rows.length} user(s)
+              Page {page} of {totalPages} · {meta?.total ?? 0} user(s)
             </span>
             <Button
               size="sm"
               variant="outline"
-              disabled={page >= pages - 1}
+              disabled={page >= totalPages}
               onClick={() => setPage(page + 1)}
             >
               Next
@@ -456,24 +339,7 @@ function UsersTable({
           </div>
         </>
       )}
-      <ConfirmDialog
-        open={!!change}
-        onOpenChange={(open) => {
-          if (!open) setChange(null);
-        }}
-        title={change ? (statusCopy[change.status]?.title ?? "") : ""}
-        text={change ? `${change.user.name}: ${statusCopy[change.status]?.text ?? ""}` : ""}
-        confirmLabel={change ? (statusCopy[change.status]?.label ?? "Confirm") : "Confirm"}
-        onConfirm={() => {
-          if (!change) return;
-          setUserStatus(name, [change.user.id], change.status);
-          toast.success(
-            `${change.user.name} is now ${accountStatusLabels[change.status].toLowerCase()}.`,
-          );
-          setChange(null);
-        }}
-      />
-      <RejectDialog user={rejecting} onClose={() => setRejecting(null)} />
+      <UserStatusDialog change={change} onClose={() => setChange(null)} />
     </>
   );
 }

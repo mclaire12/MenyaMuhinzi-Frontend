@@ -41,6 +41,8 @@ export interface AccountRequestResponse {
   decision: AccountDecision | null;
   createdAt: string;
   updatedAt: string;
+  /** Only on approve/reject: whether the SMTP server accepted the verification or rejection email. */
+  emailSent?: boolean;
 }
 
 export interface PaginationMeta {

@@ -14,9 +14,9 @@ type CallbackSearch = { code?: string; state?: string; error?: string };
 
 export const Route = createFileRoute("/auth/google/callback")({
   validateSearch: (search: Record<string, unknown>): CallbackSearch => ({
-    ...(typeof search.code === "string" ? { code: search.code } : {}),
-    ...(typeof search.state === "string" ? { state: search.state } : {}),
-    ...(typeof search.error === "string" ? { error: search.error } : {}),
+    ...(typeof search["code"] === "string" ? { code: search["code"] } : {}),
+    ...(typeof search["state"] === "string" ? { state: search["state"] } : {}),
+    ...(typeof search["error"] === "string" ? { error: search["error"] } : {}),
   }),
   head: () => ({
     meta: [{ title: "Google sign-in — MenyaMuhinzi" }],
@@ -35,9 +35,9 @@ function GoogleCallbackPage() {
     if (started.current) return;
     started.current = true;
 
-    if (search.error) {
+    if (search["error"]) {
       const text =
-        search.error === "access_denied"
+        search["error"] === "access_denied"
           ? "Wahagaritse Google sign-in."
           : "Google sign-in ntiyashoboye.";
       setMessage(text);

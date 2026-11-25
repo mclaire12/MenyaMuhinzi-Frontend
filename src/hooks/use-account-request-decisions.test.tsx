@@ -4,7 +4,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { useAccountRequestDecisions } from "@/hooks/use-account-request-decisions";
 import { approveAccountRequest } from "@/lib/api/account-request-service";
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 
 vi.mock("@/lib/api/account-request-service", () => ({
   approveAccountRequest: vi.fn(),

@@ -2,7 +2,7 @@ import type { ParsedBffError } from "./parse-bff-error";
 
 export function loginErrorToast(error: ParsedBffError): string {
   if (error.code === "unauthorized") {
-    return "Email cyangwa ijambo ry'ibanga si byo.";
+    return "Email, nimero ya telefoni cyangwa ijambo ry'ibanga si byo.";
   }
   if (error.code === "locked" || error.status === 423) {
     return "Konti ifunze by'agateganyo kubera ibigeragezo byinshi. Gerageza nyuma.";
@@ -15,6 +15,9 @@ export function loginErrorToast(error: ParsedBffError): string {
   }
   if (error.code === "forbidden") {
     const msg = error.message.toLowerCase();
+    if (isEmailNotVerified(error)) {
+      return "Banza wemeze email yawe. Reba link twakoherereje, cyangwa usabe indi.";
+    }
     if (msg.includes("awaiting administrator") || msg.includes("pending")) {
       return "Konti yawe iracyategereje kwemezwa n'umuyobozi.";
     }
@@ -30,4 +33,9 @@ export function loginErrorToast(error: ParsedBffError): string {
     return "Konti ntishobora gukoreshwa.";
   }
   return error.message || "Igikorwa nticyashoboye.";
+}
+
+/** The backend refuses sign-in until the personal email is verified. */
+export function isEmailNotVerified(error: ParsedBffError): boolean {
+  return error.code === "forbidden" && error.message.toLowerCase().includes("email verification");
 }

@@ -14,6 +14,8 @@ const validFarmer: RegistrationFormValues = {
   province: "NORTHERN",
   district: "musanze",
   sector: "Muhoza",
+  cell: "Ruhengeri",
+  village: "Kigombe",
   farmerCategory: "SMALLHOLDER",
   professionalTitle: "",
   organization: "",
@@ -34,7 +36,13 @@ describe("registrationSchema", () => {
       email: "jeanne@example.rw",
       password: "Umuhinzi2026",
       preferredLanguage: "rw",
-      location: { province: "NORTHERN", district: "Musanze", sector: "Muhoza" },
+      location: {
+        province: "NORTHERN",
+        district: "Musanze",
+        sector: "Muhoza",
+        cell: "Ruhengeri",
+        village: "Kigombe",
+      },
       farmerCategory: "SMALLHOLDER",
     });
   });
@@ -44,6 +52,8 @@ describe("registrationSchema", () => {
       ...validFarmer,
       accountType: "FACILITATOR",
       sector: "",
+      cell: "",
+      village: "",
       professionalTitle: "Agronomist",
       organization: "Rwanda Agriculture Board",
       contactPhone: "0788 654 321",
@@ -64,22 +74,58 @@ describe("registrationSchema", () => {
     expect(result.data).not.toHaveProperty("location.sector");
   });
 
-  it("lets a farmer omit email and farmer category", () => {
-    const result = registrationSchema.safeParse({
-      ...validFarmer,
-      email: "  ",
-      farmerCategory: "",
-    });
+  it("lets a farmer omit the farmer category", () => {
+    const result = registrationSchema.safeParse({ ...validFarmer, farmerCategory: "" });
 
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data).not.toHaveProperty("email");
     expect(result.data).not.toHaveProperty("farmerCategory");
+  });
+
+  it("requires a valid personal email for every account type", () => {
+    for (const accountType of ["SMARTPHONE_FARMER", "FACILITATOR"] as const) {
+      const base = {
+        ...validFarmer,
+        accountType,
+        professionalTitle: "Agronomist",
+        organization: "Rwanda Agriculture Board",
+      };
+      expect(registrationSchema.safeParse({ ...base, email: "  " }).success).toBe(false);
+      expect(registrationSchema.safeParse({ ...base, email: "not-an-email" }).success).toBe(false);
+    }
+  });
+
+  it("requires cell and village for farmers but not for facilitators", () => {
+    const missingCell = registrationSchema.safeParse({ ...validFarmer, cell: "" });
+    expect(missingCell.success).toBe(false);
+    if (!missingCell.success) {
+      expect(missingCell.error.issues.map((issue) => issue.path.join("."))).toContain("cell");
+    }
+    expect(registrationSchema.safeParse({ ...validFarmer, village: "" }).success).toBe(false);
+  });
+
+  it("only accepts facilitator titles from the dropdown list", () => {
+    const facilitator = {
+      ...validFarmer,
+      accountType: "FACILITATOR" as const,
+      organization: "Rwanda Agriculture Board",
+    };
+    expect(registrationSchema.safeParse({ ...facilitator, professionalTitle: "" }).success).toBe(
+      false,
+    );
+    expect(
+      registrationSchema.safeParse({ ...facilitator, professionalTitle: "Wizard" }).success,
+    ).toBe(false);
+    expect(
+      registrationSchema.safeParse({ ...facilitator, professionalTitle: "Farmer Promoter" })
+        .success,
+    ).toBe(true);
   });
 
   it("requires a facilitator email and rejects a weak password or missing sector", () => {
     expect(
-      registrationSchema.safeParse({ ...validFarmer, accountType: "FACILITATOR", email: "" }).success,
+      registrationSchema.safeParse({ ...validFarmer, accountType: "FACILITATOR", email: "" })
+        .success,
     ).toBe(false);
     expect(registrationSchema.safeParse({ ...validFarmer, password: "onlyletters" }).success).toBe(
       false,

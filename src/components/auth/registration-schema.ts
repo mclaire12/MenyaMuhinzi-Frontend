@@ -1,3 +1,4 @@
+import { FACILITATOR_TITLES } from "@/components/auth/facilitator-titles";
 import { z } from "zod";
 import type { FarmerCategory, Province, RegistrationRequest } from "@/lib/api/types";
 
@@ -38,7 +39,7 @@ export const registrationSchema = z
       .refine((value) => /^\+2507[2389]\d{7}$/.test(value), {
         message: "Andika nimero ya telefoni yo mu Rwanda yemewe, urugero: 0788123456.",
       }),
-    email: z.string().trim().toLowerCase().max(254),
+    email: z.string().trim().toLowerCase().email("Andika email yemewe.").max(254),
     password: z
       .string()
       .min(8, "Ijambo ry'ibanga rigomba kugira nibura inyuguti 8.")
@@ -49,6 +50,8 @@ export const registrationSchema = z
     province: z.enum(provinces as [Province, ...Province[]]),
     district: z.string().trim().min(1, "Hitamo akarere."),
     sector: z.string().trim(),
+    cell: z.string().trim(),
+    village: z.string().trim(),
     farmerCategory: z.union([
       z.enum(farmerCategories as [FarmerCategory, ...FarmerCategory[]]),
       z.literal(""),
@@ -68,27 +71,42 @@ export const registrationSchema = z
       });
     }
 
-    if (values.accountType === "SMARTPHONE_FARMER" && !values.sector) {
-      context.addIssue({
-        code: "custom",
-        path: ["sector"],
-        message: "Hitamo umurenge.",
-      });
-    } else if (values.sector.length > 80) {
-      context.addIssue({
-        code: "custom",
-        path: ["sector"],
-        message: "Umurenge ntugomba kurenza inyuguti 80.",
-      });
+    const addressParts = [
+      {
+        path: "sector",
+        value: values.sector,
+        missing: "Andika umurenge.",
+        tooLong: "Umurenge ntugomba kurenza inyuguti 80.",
+      },
+      {
+        path: "cell",
+        value: values.cell,
+        missing: "Andika akagari.",
+        tooLong: "Akagari ntikagomba kurenza inyuguti 80.",
+      },
+      {
+        path: "village",
+        value: values.village,
+        missing: "Andika umudugudu.",
+        tooLong: "Umudugudu ntugomba kurenza inyuguti 80.",
+      },
+    ] as const;
+    for (const part of addressParts) {
+      // Farmers give the full address; facilitators may leave sector, cell and village empty.
+      if (values.accountType === "SMARTPHONE_FARMER" && !part.value) {
+        context.addIssue({ code: "custom", path: [part.path], message: part.missing });
+      } else if (part.value.length > 80) {
+        context.addIssue({ code: "custom", path: [part.path], message: part.tooLong });
+      }
     }
 
-    if (values.accountType === "FACILITATOR" && !values.email) {
+    if (!values.email) {
       context.addIssue({
         code: "custom",
         path: ["email"],
         message: "Andika email yawe.",
       });
-    } else if (values.email && !z.string().email().safeParse(values.email).success) {
+    } else if (!z.string().email().safeParse(values.email).success) {
       context.addIssue({
         code: "custom",
         path: ["email"],
@@ -101,13 +119,13 @@ export const registrationSchema = z
         context.addIssue({
           code: "custom",
           path: ["professionalTitle"],
-          message: "Andika umwanya wawe w'akazi.",
+          message: "Hitamo umwanya wawe w'akazi.",
         });
-      } else if (values.professionalTitle.length > 150) {
+      } else if (!FACILITATOR_TITLES.includes(values.professionalTitle)) {
         context.addIssue({
           code: "custom",
           path: ["professionalTitle"],
-          message: "Umwanya w'akazi ntugomba kurenza inyuguti 150.",
+          message: "Hitamo umwanya w'akazi uri ku rutonde.",
         });
       }
 
@@ -152,14 +170,20 @@ export const registrationSchema = z
       phoneNumber: values.phoneNumber,
       password: values.password,
       preferredLanguage: values.preferredLanguage,
-      ...(values.email ? { email: values.email } : {}),
+      email: values.email,
     };
 
     if (values.accountType === "SMARTPHONE_FARMER") {
       return {
         ...base,
         accountType: "SMARTPHONE_FARMER",
-        location: { province: values.province, district, sector: values.sector },
+        location: {
+          province: values.province,
+          district,
+          sector: values.sector,
+          cell: values.cell,
+          village: values.village,
+        },
         ...(values.farmerCategory ? { farmerCategory: values.farmerCategory } : {}),
       };
     }
@@ -167,8 +191,13 @@ export const registrationSchema = z
     return {
       ...base,
       accountType: "FACILITATOR",
-      email: values.email,
-      location: { province: values.province, district },
+      location: {
+        province: values.province,
+        district,
+        ...(values.sector ? { sector: values.sector } : {}),
+        ...(values.cell ? { cell: values.cell } : {}),
+        ...(values.village ? { village: values.village } : {}),
+      },
       facilitator: {
         professionalTitle: values.professionalTitle,
         organization: values.organization,

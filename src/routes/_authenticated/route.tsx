@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { LoaderCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
+const BASIC_PHONE_ALLOWED_PATHS = ["/phone", "/account/password"];
+
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   component: AuthenticatedGate,
@@ -19,13 +21,15 @@ function AuthenticatedGate() {
     if (!isAuthenticated) navigate({ to: "/auth", replace: true });
   }, [loading, sessionUnavailable, isAuthenticated, navigate]);
 
+  // Basic-phone farmers only use the testing portal (and can change their password).
+  const basicPhoneBlocked =
+    isAuthenticated &&
+    roles.includes("basic_phone_farmer") &&
+    !BASIC_PHONE_ALLOWED_PATHS.includes(pathname);
+
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const allowedBasicPhonePaths = ["/phone", "/account/password"];
-    if (roles.includes("basic_phone_farmer") && !allowedBasicPhonePaths.includes(pathname)) {
-      navigate({ to: "/phone", replace: true });
-    }
-  }, [isAuthenticated, roles, pathname, navigate]);
+    if (basicPhoneBlocked) navigate({ to: "/phone", replace: true });
+  }, [basicPhoneBlocked, navigate]);
 
   if (loading) {
     return (
@@ -50,6 +54,8 @@ function AuthenticatedGate() {
   }
 
   if (!isAuthenticated) return null;
+  // Never render staff or smartphone-farmer pages for a basic-phone farmer, even for one frame.
+  if (basicPhoneBlocked) return null;
 
   return <Outlet />;
 }

@@ -36,7 +36,16 @@ export function useAccountRequestDecisions() {
     },
     onSuccess: (data, variables) => {
       refresh(variables.requestId);
-      toast.success(`${data.applicant.fullName} approved. The account is now active.`);
+      // Approval alone does not allow sign-in: the applicant must verify their email first.
+      if (data.emailSent === false) {
+        toast.warning(
+          `${data.applicant.fullName} approved, but the verification email could not be sent. They can request a new link from the sign-in page.`,
+        );
+      } else {
+        toast.success(
+          `${data.applicant.fullName} approved. A verification email was sent; they can sign in once it is confirmed.`,
+        );
+      }
     },
     onError: (error, variables) => handleDecisionError(error, variables.requestId),
   });
@@ -46,7 +55,13 @@ export function useAccountRequestDecisions() {
       rejectAccountRequest(requestId, { reason: reason.trim() }),
     onSuccess: (data, variables) => {
       refresh(variables.requestId);
-      toast.success(`${data.applicant.fullName}'s request was rejected.`);
+      if (data.emailSent === false) {
+        toast.warning(
+          `${data.applicant.fullName}'s request was rejected, but the notification email could not be sent.`,
+        );
+      } else {
+        toast.success(`${data.applicant.fullName}'s request was rejected. They were notified by email.`);
+      }
     },
     onError: (error, variables) => handleDecisionError(error, variables.requestId),
   });

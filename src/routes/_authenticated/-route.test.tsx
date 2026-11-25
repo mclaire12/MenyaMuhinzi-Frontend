@@ -84,6 +84,37 @@ describe("AuthenticatedGate", () => {
     });
   });
 
+  it.each(["/admin", "/admin/users", "/facilitator", "/dashboard", "/assistant"])(
+    "never renders %s for a basic phone farmer and redirects to the portal",
+    async (path) => {
+      pathname = path;
+      useAuthMock.mockReturnValue({
+        user: { id: "u1", status: "ACTIVE" },
+        loading: false,
+        isAuthenticated: true,
+        sessionUnavailable: false,
+        roles: ["basic_phone_farmer"],
+      });
+      const { queryByTestId } = render(<AuthenticatedGate />);
+      expect(queryByTestId("outlet")).toBeNull();
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/phone", replace: true }));
+    },
+  );
+
+  it("renders the testing portal for a basic phone farmer", () => {
+    pathname = "/phone";
+    useAuthMock.mockReturnValue({
+      user: { id: "u1", status: "ACTIVE" },
+      loading: false,
+      isAuthenticated: true,
+      sessionUnavailable: false,
+      roles: ["basic_phone_farmer"],
+    });
+    const { getByTestId } = render(<AuthenticatedGate />);
+    expect(getByTestId("outlet")).toBeDefined();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it("allows basic phone farmers on the change-password page", () => {
     pathname = "/account/password";
     useAuthMock.mockReturnValue({

@@ -14,8 +14,8 @@ type Props = { initial: UserValues; roles: PortalRole[]; submitLabel: string; on
 const roleNotes: Record<PortalRole, string> = {
   ADMIN: "Full control of the platform. Signs in on the web with an email.",
   FACILITATOR: "Manages farmer groups, courses and teaching materials. Signs in on the web with an email.",
-  SMARTPHONE_FARMER: "Learns in the web app. Email is optional; the phone number identifies the farmer.",
-  BASIC_PHONE_FARMER: "Learns only by USSD and IVR with the phone number. No email and no web dashboard access.",
+  SMARTPHONE_FARMER: "Learns in the web app. Personal email and phone number are required.",
+  BASIC_PHONE_FARMER: "Learning portal for basic-phone testing. Personal email and phone number are required.",
 };
 
 export function UserForm({ initial, roles, submitLabel, onSubmit, onCancel }: Props) {
@@ -46,7 +46,7 @@ export function UserForm({ initial, roles, submitLabel, onSubmit, onCancel }: Pr
     <label>Full name<input value={values.name} onChange={(event) => set("name", event.target.value)} autoComplete="name" /></label>
     <div className="fac-row">
       <label>Phone number<input value={values.phone} onChange={(event) => set("phone", event.target.value)} placeholder="07XXXXXXXX" inputMode="tel" /></label>
-      {!basic && <label>Email{farmer ? " (optional)" : ""}<input type="email" value={values.email} onChange={(event) => set("email", event.target.value)} placeholder={staff ? "name@menyamuhinzi.rw" : "Optional"} /></label>}
+      <label>Email<input type="email" required value={values.email} onChange={(event) => set("email", event.target.value)} placeholder="name@menyamuhinzi.rw" /></label>
       <label>Preferred language<select value={values.language} onChange={(event) => set("language", event.target.value as PlatformLanguage)}>{languages.map((row) => <option key={row.code} value={row.code}>{row.name}</option>)}</select></label>
     </div>
     <div className="fac-row">

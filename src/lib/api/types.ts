@@ -159,13 +159,15 @@ export interface RegistrationLocation {
   province: Province;
   district: string;
   sector?: string;
+  cell?: string;
+  village?: string;
 }
 
 interface RegistrationRequestBase {
   fullName: string;
   phoneNumber: string;
-  /** Required for facilitators. Omitted for farmers when the form leaves it blank. */
-  email?: string;
+  /** Personal email, mandatory for every account; used for verification and notifications. */
+  email: string;
   password: string;
   preferredLanguage: Language;
   location: RegistrationLocation;
@@ -174,12 +176,11 @@ interface RegistrationRequestBase {
 export type RegistrationRequest =
   | (RegistrationRequestBase & {
       accountType: "SMARTPHONE_FARMER";
-      location: RegistrationLocation & { sector: string };
+      location: RegistrationLocation & { sector: string; cell: string; village: string };
       farmerCategory?: FarmerCategory;
     })
   | (RegistrationRequestBase & {
       accountType: "FACILITATOR";
-      email: string;
       facilitator: {
         professionalTitle: string;
         organization: string;
@@ -191,6 +192,10 @@ export type RegistrationRequest =
 export interface RegistrationResponse {
   user: UserResponse;
   requiresApproval: boolean;
+  /** Every account verifies its personal email before signing in. */
+  requiresEmailVerification?: boolean;
+  /** True only when the backend's SMTP server accepted the verification email. */
+  verificationEmailSent?: boolean;
   accountRequestId: string | null;
   message: string;
 }
