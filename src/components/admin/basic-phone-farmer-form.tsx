@@ -1,6 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
-import { districtsByProvince } from "@/components/auth/registration-schema";
+import { LocationFields } from "@/components/location/location-fields";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import {
@@ -12,13 +12,13 @@ import type { Province } from "@/lib/api/types";
 import { bffCreateBasicPhoneFarmer } from "@/lib/auth/basic-phone-farmer-server-fns";
 import { parseBffError } from "@/lib/auth/parse-bff-error";
 
-const PROVINCES: { value: Province; label: string }[] = [
-  { value: "KIGALI_CITY", label: "Kigali City" },
-  { value: "NORTHERN", label: "Northern Province" },
-  { value: "SOUTHERN", label: "Southern Province" },
-  { value: "EASTERN", label: "Eastern Province" },
-  { value: "WESTERN", label: "Western Province" },
-];
+const PROVINCES: Record<Province, string> = {
+  KIGALI_CITY: "Kigali City",
+  NORTHERN: "Northern Province",
+  SOUTHERN: "Southern Province",
+  EASTERN: "Eastern Province",
+  WESTERN: "Western Province",
+};
 
 type Values = {
   fullName: string;
@@ -166,45 +166,17 @@ export function BasicPhoneFarmerForm({ mode, onCreated, onCancel }: Props) {
           </select>
         </label>
       </div>
-      <div className="fac-row">
-        <label>
-          Province
-          <select
-            value={values.province}
-            onChange={(event) => {
-              set("province", event.target.value as Province);
-              set("district", "");
-            }}
-          >
-            {PROVINCES.map((province) => (
-              <option key={province.value} value={province.value}>
-                {province.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {field(
-          "district",
-          "District",
-          <select
-            value={values.district}
-            aria-invalid={Boolean(errors["district"])}
-            onChange={(event) => set("district", event.target.value)}
-          >
-            <option value="">Choose a district</option>
-            {districtsByProvince[values.province].map((district) => (
-              <option key={district} value={district}>
-                {district}
-              </option>
-            ))}
-          </select>,
-        )}
-      </div>
-      <div className="fac-row">
-        {field("sector", "Sector", text("sector", { placeholder: "e.g. Kimironko" }))}
-        {field("cell", "Cell", text("cell", { placeholder: "e.g. Bibare" }))}
-        {field("village", "Village", text("village", { placeholder: "e.g. Imena" }))}
-      </div>
+      <LocationFields
+        idPrefix="basic-phone-farmer"
+        value={values}
+        provinceNames={PROVINCES}
+        errors={errors}
+        onChange={(next, changed) => {
+          setValues((current) => ({ ...current, ...next }));
+          setErrors((current) => ({ ...current, [changed]: undefined }));
+          setServerError("");
+        }}
+      />
       {mode === "direct"
         ? field(
             "password",

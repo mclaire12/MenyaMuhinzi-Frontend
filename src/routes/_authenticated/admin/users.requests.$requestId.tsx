@@ -280,7 +280,7 @@ function AccountRequestDetailPage() {
 function BackToApprovals() {
   return (
     <Link
-      to="/admin/users/"
+      to="/admin/users"
       search={{ tab: "approvals" }}
       className="inline-flex items-center gap-1 text-sm font-bold text-primary"
     >

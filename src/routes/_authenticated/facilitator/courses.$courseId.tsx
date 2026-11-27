@@ -1,75 +1,274 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Plus, Sparkles } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
-import { CourseDetails, CourseEditorProvider, LessonEditor, LessonPreview, ModuleCard } from "@/components/course-editor";
-import { PageHead, useFacilitator } from "@/components/facilitator/shell";
-import { ConfirmButton, CropTag, formatDateTime, StatusPill } from "@/components/facilitator/ui";
+import { formatDate, formatDateTime, Pill, Tabs } from "@/components/admin/shell";
+import { PageHead } from "@/components/facilitator/shell";
+import { PublishToGroupsDialog } from "@/components/facilitator/group-course-actions";
+import { publishBlocker, useUnpublishFromGroups } from "@/lib/facilitator/group-course-publish";
+import { ConfirmDialog, Stat } from "@/components/facilitator/ui";
 import { Button } from "@/components/ui/button";
-import { languageNames } from "@/lib/mock/crops";
-import { courseIssues } from "@/lib/mock/quality";
-import { addModule, duplicateCourse, runCourseAction, updateCourseDetails } from "@/lib/mock/services/courses";
-import { courseRevisions, latestDecision, setLessonValidated } from "@/lib/mock/services/reviews";
-import { actionLabels, canEditCourse, facilitatorActions } from "@/lib/mock/workflow";
+import { useAuth } from "@/hooks/use-auth";
+import { adminErrorMessage } from "@/lib/admin/api";
+import { audienceCodeLabels, cropLabel } from "@/lib/admin/backend-groups";
+import {
+  adminCourseQueryOptions,
+  adminCourseStructureQueryOptions,
+  categoryLabels,
+  courseGenerationQueryOptions,
+  difficultyLabels,
+  formatMinutes,
+  generationInProgress,
+  generationStatusLabels,
+  generationStatusTone,
+  languageLabels,
+  learningFormatLabels,
+  lessonTypeLabels,
+} from "@/lib/admin/backend-courses";
+import { groupCourseStatusLabels } from "@/lib/facilitator/backend-courses";
+import { parseBffError } from "@/lib/auth/parse-bff-error";
 
-export const Route = createFileRoute("/_authenticated/facilitator/courses/$courseId")({ component: CourseEditor });
+export const Route = createFileRoute("/_authenticated/facilitator/courses/$courseId")({
+  component: CoursePage,
+});
 
-function CourseEditor() {
+type Tab = "structure" | "generation";
+
+/** A course as the facilitator sees it; their own group courses can be published to that group. */
+function CoursePage() {
   const { courseId } = Route.useParams();
-  const { facilitator, actor, permissions, state } = useFacilitator();
-  const navigate = useNavigate();
-  const course = state.courses.find((item) => item.id === courseId && item.ownerId === facilitator.id);
-  const [tab, setTab] = useState<"structure" | "details" | "preview" | "history">("structure");
-  const [selected, setSelected] = useState<string | null>(null);
-  if (!course) return <PageHead title="Course not found" text="This course does not exist or is managed by another facilitator."><Button asChild variant="outline"><Link to="/facilitator/courses">Back to courses</Link></Button></PageHead>;
-  const current = course;
-  const editable = canEditCourse(course);
-  const issues = courseIssues(course);
-  const blocking = issues.filter((issue) => issue.blocking);
-  const lessons = course.modules.flatMap((module) => module.lessons.map((lesson) => ({ module, lesson })));
-  const active = lessons.find((row) => row.lesson.id === selected) ?? lessons[0] ?? null;
-  const decision = latestDecision(state, course.id);
+  const { permissions, loading } = useAuth();
+  const enabled = permissions.includes("courses:read") && !loading;
+  const course = useQuery(adminCourseQueryOptions(courseId, enabled));
+  const structure = useQuery(adminCourseStructureQueryOptions(courseId, enabled));
+  const [tab, setTab] = useState<Tab>("structure");
+  const [publishing, setPublishing] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const unpublish = useUnpublishFromGroups();
 
-  function act(action: Parameters<typeof runCourseAction>[1]) {
-    const error = runCourseAction(current.id, action, actor, permissions);
-    if (error) toast.error(error); else toast.success(`${actionLabels[action]} done.`);
+  const back = (
+    <Link
+      to="/facilitator/courses"
+      className="inline-flex items-center gap-1 text-sm font-bold text-primary"
+    >
+      <ArrowLeft className="size-4" aria-hidden />
+      Back to courses
+    </Link>
+  );
+  if (loading || course.isLoading)
+    return (
+      <>
+        {back}
+        <p className="fac-empty">Loading course…</p>
+      </>
+    );
+  if (course.isError || !course.data) {
+    const notFound = parseBffError(course.error).status === 404;
+    return (
+      <>
+        {back}
+        <PageHead
+          title={notFound ? "Course not found" : "Course could not be loaded"}
+          text={
+            notFound
+              ? "This course does not exist or is not available to you."
+              : adminErrorMessage(course.error, "Try again.")
+          }
+        />
+      </>
+    );
   }
-  const guard = (ok: boolean, message: string) => (ok ? toast.success(message) : toast.error("Only draft courses can be edited."));
 
-  return <CourseEditorProvider value={{ actor, setValidated: (courseId, lessonId, validated) => setLessonValidated(courseId, lessonId, actor, validated, permissions) }}>
-    <Link to="/facilitator/courses" className="text-sm font-bold text-primary">Back to courses</Link>
-    <PageHead title={course.title} text={`${course.level} · ${languageNames[course.language]} · ${course.durationWeeks} week(s) · revision ${course.revision}`}>
-      <CropTag crop={course.crop} /><StatusPill status={course.status} />
-    </PageHead>
-    <div className="admin-actions mb-3">
-      {facilitatorActions(course.status, permissions).map((action) => action === "archive"
-        ? <ConfirmButton key={action} label="Archive" title="Archive this course?" text="Archived courses leave the farmer catalogue. You can restore them as drafts." onConfirm={() => act("archive")} />
-        : <Button key={action} size="sm" variant={action === "submit" || action === "publish" ? "default" : "outline"} disabled={action === "submit" && blocking.length > 0} onClick={() => act(action)}>{actionLabels[action]}</Button>)}
-      <Button size="sm" variant="outline" onClick={() => { const id = duplicateCourse(actor, current.id); if (id) { toast.success("Duplicated as a draft."); navigate({ to: "/facilitator/courses/$courseId", params: { courseId: id } }); } }}>Duplicate</Button>    </div>
-    {course.status === "approved" && !permissions.publish && <p className="fac-note">Approved by an agricultural expert. Your role cannot publish, so an administrator will publish it from the Admin Portal.</p>}
-    {!editable && <p className="fac-note">This course is {course.status.replace("_", " ")}. Only drafts can be edited{course.status === "rejected" ? " — choose Revise to start a new revision." : course.status === "published" ? " — duplicate it to prepare changes." : "."}</p>}
-    {decision?.action === "rejected" && course.status !== "pending_review" && <p className="fac-error mb-3"><span><b>Reviewer feedback ({decision.authorName}):</b> {decision.comment}</span></p>}
-    {course.aiGenerated && <div className="ai-warning mb-3"><Sparkles aria-hidden /><p>Parts of this course were drafted by AI. Each AI lesson must be validated before the course can be submitted.</p></div>}
-    {issues.length > 0 && <details className="admin-panel mb-3" open={blocking.length > 0 && editable}><summary className="font-bold">{blocking.length} item(s) required before review · {issues.length - blocking.length} suggestion(s)</summary><ul className="mt-2 space-y-1 text-sm">{issues.map((issue, index) => <li key={index} className={issue.blocking ? "text-destructive" : "text-muted-foreground"}>{issue.blocking ? "Required: " : "Suggestion: "}{issue.text}</li>)}</ul></details>}
+  const current = course.data;
+  const ownGroupCourse = !!current.facilitatorOwner;
+  const blocker = publishBlocker(current);
+  const groupNames = current.sharedWithGroups.map((group) => group.name).join(", ");
+  const writing = generationInProgress(current.generation);
+  const chapters = structure.data ?? [];
+  const subChapters = chapters.flatMap((chapter) => chapter.lessons);
 
-    <div className="admin-actions mb-3" role="tablist">{(["structure", "details", "preview", "history"] as const).map((item) => <Button key={item} role="tab" aria-selected={tab === item} size="sm" variant={tab === item ? "default" : "outline"} onClick={() => setTab(item)}>{item === "structure" ? "Modules & lessons" : item === "details" ? "Course details" : item === "preview" ? "Farmer preview" : "Revision history"}</Button>)}</div>
+  return (
+    <>
+      {back}
+      <PageHead
+        title={current.title}
+        text={`${difficultyLabels[current.difficulty]} · ${languageLabels[current.language]} · ${formatMinutes(current.estimatedDurationMinutes)} · ${categoryLabels[current.category]}`}
+      >
+        <Pill
+          tone={
+            current.status === "PUBLISHED" ? "ok" : current.status === "ARCHIVED" ? "muted" : "info"
+          }
+        >
+          {ownGroupCourse ? groupCourseStatusLabels[current.status] : "Published"}
+        </Pill>
+        {ownGroupCourse && (
+          <Button
+            onClick={() => setPublishing(true)}
+            disabled={!!blocker || unpublish.isPending}
+            title={blocker ?? undefined}
+          >
+            {current.status === "PUBLISHED" ? "Change groups" : "Publish to groups"}
+          </Button>
+        )}
+        {ownGroupCourse && current.status === "PUBLISHED" && (
+          <Button
+            variant="outline"
+            onClick={() => setWithdrawing(true)}
+            disabled={unpublish.isPending}
+          >
+            Stop publishing
+          </Button>
+        )}
+      </PageHead>
 
-    {tab === "details" && <CourseDetails key={`${course.id}-${course.updatedAt}`} course={course} editable={editable} onSave={(patch) => guard(updateCourseDetails(course.id, actor, patch), "Course details saved.")} />}
+      {writing && current.generation && (
+        <p className="fac-note mb-3" role="status">
+          <b>{generationStatusLabels[current.generation.status]}.</b> The structure you designed is
+          saved. The AI model writes every sub-chapter once it is connected; you can publish the
+          course to your group after that.
+        </p>
+      )}
+      {ownGroupCourse && (
+        <p className="fac-note mb-3">
+          {current.status === "PUBLISHED"
+            ? `Published ${formatDate(current.publishedAt)} to ${groupNames}. Only farmers in these groups see it.`
+            : "Not published yet. When the AI has finished, publish it to one or more of your groups; it is never published to the whole platform."}
+        </p>
+      )}
 
-    {tab === "structure" && <div className="editor-layout">
-      <div className="space-y-3">
-        {course.modules.map((module, index) => <ModuleCard key={module.id} course={course} module={module} index={index} editable={editable} selected={active?.lesson.id ?? null} onSelect={setSelected} />)}
-        {editable && <Button variant="outline" onClick={() => { const id = addModule(course.id, actor); if (id) toast.success("Module added."); }}><Plus aria-hidden />Add module</Button>}
-        {!course.modules.length && <p className="fac-empty">No modules yet.</p>}
+      <div className="admin-stats">
+        <Stat label="Crop" value={cropLabel(current.crop)} />
+        <Stat
+          label="Published to"
+          value={
+            current.facilitatorOwner
+              ? groupNames || "Your groups (not published yet)"
+              : audienceCodeLabels[current.targetAudience]
+          }
+        />
+        <Stat label="Chapters" value={structure.isLoading ? "…" : chapters.length} />
+        <Stat label="Sub-chapters" value={structure.isLoading ? "…" : subChapters.length} />
       </div>
-      <div className="min-w-0">
-        {active ? <LessonEditor key={`${active.lesson.id}-${course.updatedAt}`} course={course} lesson={active.lesson} editable={editable} onPreview={() => { setSelected(active.lesson.id); setTab("preview"); }} /> : <p className="fac-empty">Add a lesson to a module to start writing.</p>}
-      </div>
-    </div>}
+      {current.learningObjectives.length > 0 && (
+        <article className="admin-panel mb-3">
+          <h2 className="mb-1 font-bold">Learning objectives</h2>
+          <ul className="list-disc space-y-1 pl-5 text-sm">
+            {current.learningObjectives.map((objective) => (
+              <li key={objective}>{objective}</li>
+            ))}
+          </ul>
+        </article>
+      )}
 
-    {tab === "preview" && (active ? <LessonPreview course={course} lesson={active.lesson} index={lessons.findIndex((row) => row.lesson.id === active.lesson.id)} total={lessons.length} onPick={setSelected} lessons={lessons.map((row) => row.lesson)} /> : <p className="fac-empty">Nothing to preview yet.</p>)}
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: "structure", label: "Chapters & sub-chapters" },
+          ...(current.generation && ownGroupCourse
+            ? [{ value: "generation" as const, label: "AI generation" }]
+            : []),
+        ]}
+      />
+      {tab === "structure" &&
+        (structure.isError ? (
+          <p className="fac-empty" role="alert">
+            {adminErrorMessage(structure.error, "Chapters could not be loaded.")}
+          </p>
+        ) : structure.isLoading ? (
+          <p className="fac-empty">Loading chapters…</p>
+        ) : chapters.length === 0 ? (
+          <p className="fac-empty">No chapters yet.</p>
+        ) : (
+          <ol className="space-y-3">
+            {chapters.map((chapter, index) => (
+              <li key={chapter.id} className="admin-panel">
+                <h2 className="font-bold">
+                  Chapter {index + 1}. {chapter.title}
+                </h2>
+                {chapter.description && (
+                  <p className="text-sm text-muted-foreground">{chapter.description}</p>
+                )}
+                <ul className="mt-2 divide-y text-sm">
+                  {chapter.lessons.map((lesson, subIndex) => (
+                    <li key={lesson.id} className="py-2">
+                      <b>
+                        {index + 1}.{subIndex + 1} {lesson.title}
+                      </b>{" "}
+                      · {lessonTypeLabels[lesson.lessonType]} ·{" "}
+                      {formatMinutes(lesson.estimatedDurationMinutes)}
+                      {lesson.description && (
+                        <span className="block text-muted-foreground">{lesson.description}</span>
+                      )}
+                      {!lesson.mainContent && writing && (
+                        <span className="block text-xs text-muted-foreground">
+                          Content will be written by the AI.
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ))}
+      {tab === "generation" && current.generation && <Generation id={current.generation.id} />}
 
-    {tab === "history" && <ul className="admin-panel fac-list">{courseRevisions(state, course.id).map((item) => <li key={item.id}><span>{item.summary}<small className="block text-muted-foreground">Revision {item.revision} · {item.by}</small></span><small>{formatDateTime(item.at)}</small></li>)}</ul>}
-  </CourseEditorProvider>;
+      <PublishToGroupsDialog
+        course={publishing ? current : null}
+        onClose={() => setPublishing(false)}
+      />
+      <ConfirmDialog
+        open={withdrawing}
+        onOpenChange={setWithdrawing}
+        title="Stop publishing this course?"
+        text={`Farmers in ${groupNames || "your groups"} stop seeing it. Their progress is kept and you can publish it again.`}
+        confirmLabel="Stop publishing"
+        onConfirm={() => {
+          unpublish.mutate(current);
+          setWithdrawing(false);
+        }}
+      />
+    </>
+  );
 }
 
+function Generation({ id }: { id: string }) {
+  const generation = useQuery(courseGenerationQueryOptions(id, true));
+  if (generation.isError) {
+    return (
+      <p className="fac-empty" role="alert">
+        {adminErrorMessage(generation.error, "The request could not be loaded.")}
+      </p>
+    );
+  }
+  if (!generation.data) return <p className="fac-empty">Loading…</p>;
+  const data = generation.data;
+  return (
+    <section className="space-y-3">
+      <article className="admin-panel space-y-1 text-sm">
+        <p>
+          <Pill tone={generationStatusTone(data.status)}>
+            {generationStatusLabels[data.status]}
+          </Pill>{" "}
+          {data.statusMessage}
+        </p>
+        <p>Requested {formatDateTime(data.createdAt)}</p>
+        <p>
+          Learning formats:{" "}
+          {data.contentFormats.map((format) => learningFormatLabels[format]).join(", ")}
+        </p>
+        <p>
+          Knowledge Base documents:{" "}
+          {data.knowledgeSources.length
+            ? data.knowledgeSources.map((source) => source.title).join(", ")
+            : "none chosen"}
+        </p>
+      </article>
+      <article className="admin-panel">
+        <h2 className="mb-2 font-bold">Instructions for the AI</h2>
+        <p className="whitespace-pre-wrap text-sm">{data.brief}</p>
+      </article>
+    </section>
+  );
+}

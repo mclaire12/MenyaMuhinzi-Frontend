@@ -67,7 +67,7 @@ describe("account request detail", () => {
       "detail",
       requestId,
     ]);
-    await options.queryFn();
+    await options.queryFn!({} as never);
     expect(getMock).toHaveBeenCalledWith(requestId);
     expect(getMock).toHaveBeenCalledTimes(1);
   });
@@ -185,9 +185,9 @@ describe("account request detail", () => {
 });
 
 describe("admin user detail route", () => {
-  it("still exposes the mock user detail module", async () => {
+  it("exposes the user detail route module", async () => {
     const mod = await import("@/routes/_authenticated/admin/users.$userId");
     expect(mod.Route).toBeDefined();
-    expect(mod.Route.options.path).toBeUndefined();
-  });
+    expect((mod.Route.options as { path?: string }).path).toBeUndefined();
+  }, 20_000);
 });

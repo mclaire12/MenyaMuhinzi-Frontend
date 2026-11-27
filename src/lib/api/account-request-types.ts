@@ -58,11 +58,11 @@ export interface PaginatedAccountRequests {
 }
 
 export interface ListAccountRequestsQuery {
-  status?: AccountRequestStatus;
-  requestedRole?: UserRole;
-  search?: string;
-  page?: number;
-  limit?: number;
+  status?: AccountRequestStatus | undefined;
+  requestedRole?: UserRole | undefined;
+  search?: string | undefined;
+  page?: number | undefined;
+  limit?: number | undefined;
 }
 
 export interface ApproveAccountRequestInput {

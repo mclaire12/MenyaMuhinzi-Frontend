@@ -1,15 +1,14 @@
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Bot, LayoutDashboard, Library, LogOut, Menu, MoreHorizontal, Server, Settings, Users, UsersRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { HeaderAlerts } from "@/components/header-alerts";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
+import { useAdminAlerts } from "@/lib/admin/admin-alerts";
+import { platformSettingsQueryOptions } from "@/lib/admin/backend-settings";
 import { adminActor } from "@/lib/admin/courses";
-import { systemAlerts } from "@/lib/admin/platform";
-import { useAdmin } from "@/lib/admin/store";
-import { useLearningState } from "@/lib/mock/store";
 
 const links = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -24,14 +23,15 @@ const links = [
 
 export function useAdminActor() {
   const { user } = useAuth();
-  const name = user?.name ?? "Administrator";
+  const name = user?.fullName ?? "Administrator";
   return { name, actor: adminActor(name) };
 }
 
 export function AdminLayout() {
-  const { roles, user, signOut: endSession } = useAuth();
-  const data = useAdmin();
-  const learning = useLearningState();
+  const { roles, user, permissions, loading, signOut: endSession } = useAuth();
+  const isAdmin = roles.includes("admin");
+  const alerts = useAdminAlerts(permissions, isAdmin && !loading);
+  const settings = useQuery(platformSettingsQueryOptions(isAdmin && !loading && permissions.includes("platform-settings:read")));
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -39,10 +39,9 @@ export function AdminLayout() {
     await qc.cancelQueries(); qc.clear(); await endSession();
     navigate({ to: "/auth", replace: true });
   }
-  if (!roles.includes("admin")) {
+  if (!isAdmin) {
     return <div className="page-width py-16"><h1 className="text-3xl">Administrators only</h1><p className="mt-2 text-muted-foreground">Sign in with admin@menyamuhinzi.rw to open the Admin Portal.</p></div>;
   }
-  const alerts = systemAlerts(data, learning);
   return <div className="admin-shell">
     <aside className={open ? "admin-side open" : "admin-side"}>
       <p className="admin-side-label">Administrator</p>
@@ -54,7 +53,7 @@ export function AdminLayout() {
     <div className="admin-main">
       <div className="admin-top">
         <button type="button" className="admin-menu" onClick={() => setOpen((value) => !value)}><Menu aria-hidden />Menu</button>
-        <span className="text-sm text-muted-foreground">{user?.name} · {data.platform.name} administrator</span>
+        <span className="text-sm text-muted-foreground">{user?.fullName} · {settings.data?.platform.name ?? "MenyaMuhinzi"} administrator</span>
         <HeaderAlerts count={alerts.length}>{alerts.map((alert) => <DropdownMenuItem key={alert.id} asChild className="items-start whitespace-normal"><Link to={alert.to} search={alert.search as never}>{alert.text}</Link></DropdownMenuItem>)}</HeaderAlerts>
       </div>
       <Outlet />

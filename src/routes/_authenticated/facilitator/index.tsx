@@ -15,7 +15,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BasicPhoneFarmerDialog } from "@/components/admin/basic-phone-farmer-dialog";
 import { PageHead } from "@/components/facilitator/shell";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -78,9 +77,7 @@ function Dashboard() {
     <PageHead
       title="Dashboard"
       text="Figures are read live from the platform database and cover only the farmers in your own groups."
-    >
-      <BasicPhoneFarmerDialog />
-    </PageHead>
+    />
   );
 
   if (authLoading) {

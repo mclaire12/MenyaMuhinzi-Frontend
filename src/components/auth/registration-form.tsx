@@ -7,19 +7,28 @@ import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { ResendVerificationForm } from "@/components/auth/resend-verification-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LocationFields } from "@/components/location/location-fields";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api/api-error";
 import { registerAccount } from "@/lib/api/registration-service";
-import type { RegistrationRequest, RegistrationResponse } from "@/lib/api/types";
-import {
-  districtsByProvince,
-  type RegistrationFormValues,
-  registrationSchema,
-} from "./registration-schema";
+import type { Province, RegistrationRequest, RegistrationResponse } from "@/lib/api/types";
+import { LOCATION_LEVELS } from "@/lib/locations/rwanda";
+import { type RegistrationFormValues, registrationSchema } from "./registration-schema";
 
 interface RegistrationFormProps {
   onReturnToLogin: () => void;
 }
+
+const SELECT_CLASS =
+  "h-12 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+
+const PROVINCE_NAMES: Record<Province, string> = {
+  KIGALI_CITY: "Umujyi wa Kigali",
+  NORTHERN: "Amajyaruguru",
+  SOUTHERN: "Amajyepfo",
+  EASTERN: "Iburasirazuba",
+  WESTERN: "Iburengerazuba",
+};
 
 const initialValues: RegistrationFormValues = {
   accountType: "SMARTPHONE_FARMER",
@@ -49,7 +58,13 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
     defaultValues: initialValues,
   });
   const accountType = useWatch({ control: form.control, name: "accountType" });
-  const province = useWatch({ control: form.control, name: "province" });
+  const [province, district, sector, cell, village] = useWatch({
+    control: form.control,
+    name: ["province", "district", "sector", "cell", "village"],
+  });
+  const location = { province, district, sector, cell, village };
+  const optionalLabel = (label: string) =>
+    accountType === "SMARTPHONE_FARMER" ? label : `${label} (si ngombwa)`;
   const errors = form.formState.errors;
 
   async function submit(request: RegistrationRequest) {
@@ -202,84 +217,58 @@ export function RegistrationForm({ onReturnToLogin }: RegistrationFormProps) {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="registration-province">Intara</Label>
-          <select
-            id="registration-province"
-            className="h-12 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            {...form.register("province", {
-              onChange: () => {
-                setServerErrors([]);
-                form.setValue("district", "");
-              },
-            })}
-          >
-            <option value="KIGALI_CITY">Umujyi wa Kigali</option>
-            <option value="NORTHERN">Amajyaruguru</option>
-            <option value="SOUTHERN">Amajyepfo</option>
-            <option value="EASTERN">Iburasirazuba</option>
-            <option value="WESTERN">Iburengerazuba</option>
-          </select>
-          {errors.province?.message && <FieldError>{errors.province.message}</FieldError>}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="registration-district">Akarere</Label>
-          <select
-            id="registration-district"
-            className="h-12 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            {...form.register("district")}
-          >
-            <option value="">Hitamo akarere</option>
-            {districtsByProvince[province].map((district) => (
-              <option key={district} value={district}>
-                {district}
-              </option>
-            ))}
-          </select>
-          {errors.district?.message && <FieldError>{errors.district.message}</FieldError>}
-        </div>
-      </div>
-
-      <FormField
-        label={accountType === "SMARTPHONE_FARMER" ? "Umurenge" : "Umurenge (si ngombwa)"}
-        id="registration-sector"
-        error={errors.sector?.message}
-      >
-        <Input
-          id="registration-sector"
-          maxLength={80}
-          placeholder="Urugero: Kimironko"
-          {...form.register("sector")}
-        />
-      </FormField>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField
-          label={accountType === "SMARTPHONE_FARMER" ? "Akagari" : "Akagari (si ngombwa)"}
-          id="registration-cell"
-          error={errors.cell?.message}
-        >
-          <Input
-            id="registration-cell"
-            maxLength={80}
-            placeholder="Urugero: Bibare"
-            {...form.register("cell")}
-          />
-        </FormField>
-        <FormField
-          label={accountType === "SMARTPHONE_FARMER" ? "Umudugudu" : "Umudugudu (si ngombwa)"}
-          id="registration-village"
-          error={errors.village?.message}
-        >
-          <Input
-            id="registration-village"
-            maxLength={80}
-            placeholder="Urugero: Imena"
-            {...form.register("village")}
-          />
-        </FormField>
-      </div>
+      <LocationFields
+        idPrefix="registration"
+        className="grid gap-4 sm:grid-cols-2"
+        selectClassName={SELECT_CLASS}
+        value={location}
+        provinceNames={PROVINCE_NAMES}
+        labels={{
+          province: "Intara",
+          district: "Akarere",
+          sector: optionalLabel("Umurenge"),
+          cell: optionalLabel("Akagari"),
+          village: optionalLabel("Umudugudu"),
+        }}
+        placeholders={{
+          district: "Hitamo akarere",
+          sector: "Hitamo umurenge",
+          cell: "Hitamo akagari",
+          village: "Hitamo umudugudu",
+        }}
+        waitingPlaceholders={{
+          sector: "Banza uhitemo akarere",
+          cell: "Banza uhitemo umurenge",
+          village: "Banza uhitemo akagari",
+        }}
+        loadingText="Turimo gushaka aho utuye…"
+        failedText="Urutonde rw'aho utuye ntirwabonetse. Ongera ufungure urupapuro."
+        errors={{
+          province: errors.province?.message,
+          district: errors.district?.message,
+          sector: errors.sector?.message,
+          cell: errors.cell?.message,
+          village: errors.village?.message,
+        }}
+        onChange={(next) => {
+          setServerErrors([]);
+          for (const level of LOCATION_LEVELS) {
+            if (form.getValues(level) !== next[level]) {
+              form.setValue(level, next[level], {
+                shouldDirty: true,
+                shouldValidate: form.formState.isSubmitted,
+              });
+            }
+          }
+        }}
+        renderField={({ id, label, control, error }) => (
+          <div className="space-y-2">
+            <Label htmlFor={id}>{label}</Label>
+            {control}
+            {error && <FieldError>{error}</FieldError>}
+          </div>
+        )}
+      />
 
       {accountType === "SMARTPHONE_FARMER" ? (
         <>

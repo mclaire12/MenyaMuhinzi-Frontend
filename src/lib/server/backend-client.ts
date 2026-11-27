@@ -322,6 +322,105 @@ export function createBackendClient(options: BackendClientOptions = {}) {
       return payload as import("../api/add-user-types").CreatedAccountResponse;
     },
 
+    /**
+     * Generic call for the admin portal. Callers must check `isAllowedAdminApiPath` first
+     * (the admin BFF function does); the backend enforces roles and permissions.
+     */
+    async adminCall(
+      accessToken: string,
+      method: import("../api/admin-api-routes").AdminApiMethod,
+      pathWithQuery: string,
+      body?: unknown,
+    ): Promise<unknown> {
+      const { payload } = await request(pathWithQuery, {
+        method,
+        accessToken,
+        ...(body !== undefined ? { body } : {}),
+      });
+      return payload ?? null;
+    },
+
+    /** Downloads a file (e.g. the group-members Excel template) as bytes. */
+    async adminDownload(
+      accessToken: string,
+      path: string,
+    ): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+      const env = getServerRuntimeEnv();
+      const headers = bffHeaders();
+      headers.set("Authorization", `Bearer ${accessToken}`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetchFn(joinUrl(env.apiBaseUrl, path), {
+          method: "GET",
+          headers,
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          let payload: unknown = null;
+          try {
+            payload = text ? (JSON.parse(text) as unknown) : null;
+          } catch {
+            payload = null;
+          }
+          throw new BffAuthError(safeBackendMessage(payload, response.status), {
+            code: mapHttpStatusToBffCode(response.status),
+            status: response.status,
+          });
+        }
+        return {
+          bytes: await response.arrayBuffer(),
+          contentType: response.headers.get("content-type") ?? "application/octet-stream",
+        };
+      } catch (cause) {
+        if (cause instanceof BffAuthError) throw cause;
+        if (controller.signal.aborted)
+          throw new BffAuthError("Serivisi yatinze.", { code: "timeout", cause });
+        throw new BffAuthError("Ntitubashije guhuza na serivisi.", { code: "network", cause });
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    /** Multipart upload (knowledge documents). The browser never talks to the backend directly. */
+    async adminUpload(accessToken: string, path: string, form: FormData): Promise<unknown> {
+      const env = getServerRuntimeEnv();
+      const headers = bffHeaders();
+      headers.set("Authorization", `Bearer ${accessToken}`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), Math.max(timeoutMs, 60_000));
+      try {
+        const response = await fetchFn(joinUrl(env.apiBaseUrl, path), {
+          method: "POST",
+          headers,
+          body: form,
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        let payload: unknown;
+        try {
+          payload = text ? (JSON.parse(text) as unknown) : null;
+        } catch {
+          payload = null;
+        }
+        if (!response.ok) {
+          throw new BffAuthError(safeBackendMessage(payload, response.status), {
+            code: mapHttpStatusToBffCode(response.status),
+            status: response.status,
+          });
+        }
+        return payload;
+      } catch (cause) {
+        if (cause instanceof BffAuthError) throw cause;
+        if (controller.signal.aborted)
+          throw new BffAuthError("Serivisi yatinze.", { code: "timeout", cause });
+        throw new BffAuthError("Ntitubashije guhuza na serivisi.", { code: "network", cause });
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
     /** GET /users — administrators (users:read). */
     async listUsers(
       accessToken: string,

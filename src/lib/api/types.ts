@@ -82,7 +82,11 @@ export type Permission =
   | "ivr:sessions:manage"
   | "ivr:configuration:read"
   | "ivr:configuration:manage"
-  | "ivr:analytics:read";
+  | "ivr:analytics:read"
+  | "platform-settings:read"
+  | "platform-settings:manage"
+  | "course-generations:create"
+  | "course-generations:read";
 
 export interface ApiErrorResponse {
   statusCode: number;

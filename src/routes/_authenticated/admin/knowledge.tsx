@@ -1,128 +1,551 @@
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  keepPreviousData,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { formatDate, PageHead, Pill, RowMenu, useAdminActor } from "@/components/admin/shell";
-import { ConfirmDialog } from "@/components/facilitator/ui";
+import {
+  emptyKnowledgeMetadata,
+  KnowledgeDetailsDialog,
+  KnowledgeFormDialog,
+  KnowledgeRejectDialog,
+  metadataFrom,
+  type KnowledgeMetadata,
+} from "@/components/admin/knowledge-dialogs";
+import { formatDate, PageHead, Pill, RowMenu } from "@/components/admin/shell";
+import { ConfirmDialog, Stat } from "@/components/facilitator/ui";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { addKnowledge, approvalLabels, approvalOf, documentTypes, emptyKnowledge, knowledgeCrops, knowledgeTopics, removeKnowledge, setKnowledgeStatus, updateKnowledge, validateKnowledge, type Approval, type KnowledgeValues } from "@/lib/admin/knowledge";
-import { useAdmin } from "@/lib/admin/store";
-import type { KnowledgeSource, KnowledgeStatus } from "@/lib/admin/types";
+import { useAuth } from "@/hooks/use-auth";
+import { adminApi, adminErrorMessage } from "@/lib/admin/api";
+import { cropsQueryOptions } from "@/lib/admin/backend-groups";
+import {
+  adminKnowledgeKey,
+  knowledgeCountQueryOptions,
+  knowledgeListQueryOptions,
+  knowledgeNextActions,
+  knowledgeStatusLabels,
+  knowledgeStatusTone,
+  knowledgeTopicsQueryOptions,
+  sourceTypeLabels,
+  type KnowledgeSource,
+  type KnowledgeStatusCode,
+} from "@/lib/admin/backend-knowledge";
+import { bffUploadKnowledge } from "@/lib/auth/knowledge-upload-server-fns";
 
-export const Route = createFileRoute("/_authenticated/admin/knowledge")({ component: KnowledgePage });
+export const Route = createFileRoute("/_authenticated/admin/knowledge")({
+  component: KnowledgePage,
+});
 
-const approvalTone = { awaiting_review: "warn", approved: "ok", rejected: "bad", failed: "bad", archived: "muted" } as const;
-const languageName = (code: string) => (code === "en" ? "English" : code === "fr" ? "French" : "Kinyarwanda");
-const valuesOf = (item: KnowledgeSource): KnowledgeValues => ({ title: item.title, description: item.description ?? "", vegetable: item.vegetable, topic: item.topic ?? "General", language: item.language, author: item.author, kind: item.kind, fileName: item.fileName ?? "" });
+type Action =
+  "process" | "submit-review" | "approve" | "activate" | "deactivate" | "archive" | "delete";
+type Pending = { source: KnowledgeSource; action: Action } | null;
 
-type Pending = { item: KnowledgeSource; kind: "remove" | "archive" | "reject" } | null;
+const actionCopy: Record<Action, { title: string; text: string; label: string; done: string }> = {
+  process: {
+    title: "Process this document?",
+    text: "Text is extracted, split into passages and indexed. This can take a few minutes.",
+    label: "Process",
+    done: "Processing started.",
+  },
+  "submit-review": {
+    title: "Submit for review?",
+    text: "A reviewer checks the processed document before the assistant may use it.",
+    label: "Submit for review",
+    done: "Submitted for review.",
+  },
+  approve: {
+    title: "Approve this document?",
+    text: "The farmer assistant may use it in answers from now on.",
+    label: "Approve",
+    done: "Approved. The assistant may use it.",
+  },
+  activate: {
+    title: "Use this document again?",
+    text: "The approved version is used by the assistant again.",
+    label: "Activate",
+    done: "Document activated.",
+  },
+  deactivate: {
+    title: "Stop using this document?",
+    text: "The assistant stops using it. It stays approved and can be activated again.",
+    label: "Deactivate",
+    done: "Document deactivated.",
+  },
+  archive: {
+    title: "Archive this document?",
+    text: "It is no longer used by the assistant and cannot be changed.",
+    label: "Archive",
+    done: "Document archived.",
+  },
+  delete: {
+    title: "Delete this document?",
+    text: "The document and its files are removed permanently.",
+    label: "Delete",
+    done: "Document deleted.",
+  },
+};
 
-function KnowledgePage() {
-  const data = useAdmin();
-  const { name } = useAdminActor();
-  const [query, setQuery] = useState("");
-  const [crop, setCrop] = useState("all");
-  const [topic, setTopic] = useState("all");
-  const [approval, setApproval] = useState<Approval | "current">("current");
-  const [form, setForm] = useState<{ id: string | null; values: KnowledgeValues } | null>(null);
-  const [viewing, setViewing] = useState<KnowledgeSource | null>(null);
-  const [pending, setPending] = useState<Pending>(null);
-  const rows = useMemo(() => data.knowledge.filter((item) => {
-    const state = approvalOf(item.status);
-    if (approval === "current" ? state === "archived" : state !== approval) return false;
-    if (crop !== "all" && item.vegetable !== crop) return false;
-    if (topic !== "all" && (item.topic ?? "General") !== topic) return false;
-    return !query.trim() || `${item.title} ${item.description ?? ""} ${item.author}`.toLowerCase().includes(query.trim().toLowerCase());
-  }).sort((a, b) => (b.addedAt ?? b.updatedAt).localeCompare(a.addedAt ?? a.updatedAt)), [data.knowledge, approval, crop, topic, query]);
-  const counts = data.knowledge.reduce((sum, item) => { sum[approvalOf(item.status)] += 1; return sum; }, { awaiting_review: 0, approved: 0, rejected: 0, failed: 0, archived: 0 } as Record<Approval, number>);
+const COUNTED: KnowledgeStatusCode[] = ["PENDING_REVIEW", "APPROVED", "PROCESSING", "FAILED"];
 
-  function status(item: KnowledgeSource, next: KnowledgeStatus, message: string) {
-    setKnowledgeStatus(name, item.id, next);
-    toast.success(message);
-  }
-
-  return <>
-    <PageHead title="Knowledge Base" text="Reference documents the farmer assistant may draw on. They support answers; they are not courses and farmers do not see them in Amasomo.">
-      <Button onClick={() => setForm({ id: null, values: emptyKnowledge() })}><Plus aria-hidden />Add document</Button>
-    </PageHead>
-    <div className="admin-filters">
-      <input aria-label="Search documents" placeholder="Search title, description or source" value={query} onChange={(event) => setQuery(event.target.value)} />
-      <select aria-label="Crop" value={crop} onChange={(event) => setCrop(event.target.value)}><option value="all">All crops</option>{knowledgeCrops.map((item) => <option key={item}>{item}</option>)}</select>
-      <select aria-label="Topic" value={topic} onChange={(event) => setTopic(event.target.value)}><option value="all">All topics</option>{knowledgeTopics.map((item) => <option key={item}>{item}</option>)}</select>
-      <select aria-label="Approval status" value={approval} onChange={(event) => setApproval(event.target.value as Approval | "current")}><option value="current">All except archived</option>{(Object.keys(approvalLabels) as Approval[]).map((item) => <option key={item} value={item}>{approvalLabels[item]} ({counts[item]})</option>)}</select>
-    </div>
-    {!rows.length ? <p className="fac-empty">{data.knowledge.length ? "No documents match these filters." : "No documents yet."}</p> : <div className="staff-table"><table className="w-full text-sm">
-      <thead><tr><th>Title</th><th>Crop</th><th>Topic</th><th>Language</th><th>Source</th><th>Type</th><th>Status</th><th>Added</th><th className="col-actions">Actions</th></tr></thead>
-      <tbody>{rows.map((item) => { const state = approvalOf(item.status); return <tr key={item.id}>
-        <td><button type="button" className="text-left font-bold hover:underline" onClick={() => setViewing(item)}>{item.title}</button>{item.description && <small className="block text-muted-foreground">{item.description}</small>}</td>
-        <td>{item.vegetable}</td>
-        <td>{item.topic ?? "General"}</td>
-        <td>{languageName(item.language)}</td>
-        <td>{item.author}</td>
-        <td><span className="type-pill">{item.kind}</span></td>
-        <td><Pill tone={approvalTone[state]}>{approvalLabels[state]}</Pill></td>
-        <td>{formatDate(item.addedAt ?? item.updatedAt)}</td>
-        <td className="col-actions"><RowMenu label={item.title}>
-          <DropdownMenuItem onSelect={() => setViewing(item)}>View details</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setForm({ id: item.id, values: valuesOf(item) })}>Edit details</DropdownMenuItem>
-          {(state === "awaiting_review" || state === "rejected") && <DropdownMenuItem onSelect={() => status(item, "approved", "Document approved. The assistant may use it.")}>Approve</DropdownMenuItem>}
-          {(state === "awaiting_review" || state === "approved") && <DropdownMenuItem onSelect={() => setPending({ item, kind: "reject" })}>Reject</DropdownMenuItem>}
-          {state === "failed" && <DropdownMenuItem onSelect={() => status(item, "awaiting_review", "Upload retried. The document is waiting for review.")}>Retry upload</DropdownMenuItem>}
-          <DropdownMenuSeparator />
-          {state === "archived" ? <DropdownMenuItem onSelect={() => status(item, "awaiting_review", "Document restored for review.")}>Restore</DropdownMenuItem> : <DropdownMenuItem onSelect={() => setPending({ item, kind: "archive" })}>Archive</DropdownMenuItem>}
-          <DropdownMenuItem onSelect={() => setPending({ item, kind: "remove" })}>Remove</DropdownMenuItem>
-        </RowMenu></td>
-      </tr>; })}</tbody>
-    </table></div>}
-    <Dialog open={!!form} onOpenChange={(open) => { if (!open) setForm(null); }}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-        <DialogHeader><DialogTitle>{form?.id ? "Edit document details" : "Add a document"}</DialogTitle><DialogDescription>{form?.id ? "Only the details change; the file stays the same." : "New documents wait for review before the assistant can use them. In this demo only the file name is recorded."}</DialogDescription></DialogHeader>
-        {form && <KnowledgeForm initial={form.values} isNew={!form.id} onCancel={() => setForm(null)} onSubmit={(values) => { if (form.id) { updateKnowledge(name, form.id, values); toast.success("Details saved."); } else { addKnowledge(name, values); toast.success("Document added and waiting for review."); } setForm(null); }} />}
-      </DialogContent>
-    </Dialog>
-    <Dialog open={!!viewing} onOpenChange={(open) => { if (!open) setViewing(null); }}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader><DialogTitle>{viewing?.title}</DialogTitle><DialogDescription>{viewing?.description || "No description."}</DialogDescription></DialogHeader>
-        {viewing && <dl className="fac-facts">
-          <div><dt>Status</dt><dd>{approvalLabels[approvalOf(viewing.status)]}</dd></div>
-          <div><dt>Crop</dt><dd>{viewing.vegetable}</dd></div>
-          <div><dt>Topic</dt><dd>{viewing.topic ?? "General"}</dd></div>
-          <div><dt>Language</dt><dd>{languageName(viewing.language)}</dd></div>
-          <div><dt>Source</dt><dd>{viewing.author}</dd></div>
-          <div><dt>Document type</dt><dd>{viewing.kind}{viewing.fileName ? ` · ${viewing.fileName}` : ""}</dd></div>
-          <div><dt>Added</dt><dd>{formatDate(viewing.addedAt ?? viewing.updatedAt)}</dd></div>
-          <div><dt>Last updated</dt><dd>{formatDate(viewing.updatedAt)}</dd></div>
-        </dl>}
-        <DialogFooter><Button variant="outline" onClick={() => setViewing(null)}>Close</Button>{viewing && <Button onClick={() => { setForm({ id: viewing.id, values: valuesOf(viewing) }); setViewing(null); }}>Edit details</Button>}</DialogFooter>
-      </DialogContent>
-    </Dialog>
-    <ConfirmDialog open={!!pending} onOpenChange={(open) => { if (!open) setPending(null); }}
-      title={pending?.kind === "remove" ? "Remove this document?" : pending?.kind === "archive" ? "Archive this document?" : "Reject this document?"}
-      text={pending ? `${pending.item.title}: ${pending.kind === "remove" ? "it is deleted from the Knowledge Base. This cannot be undone." : pending.kind === "archive" ? "the assistant stops using it. You can restore it later." : "the assistant will not use it."}` : ""}
-      confirmLabel={pending?.kind === "remove" ? "Remove" : pending?.kind === "archive" ? "Archive" : "Reject"}
-      onConfirm={() => { if (!pending) return; if (pending.kind === "remove") { removeKnowledge(name, pending.item.id, pending.item.title); toast.success("Document removed."); } else status(pending.item, pending.kind === "archive" ? "archived" : "rejected", pending.kind === "archive" ? "Document archived." : "Document rejected."); setPending(null); }} />
-  </>;
+function metadataBody(metadata: KnowledgeMetadata, includeType: boolean) {
+  const optional = (value: string) => (value.trim() ? value.trim() : undefined);
+  return {
+    title: metadata.title.trim(),
+    ...(optional(metadata.description) ? { description: metadata.description.trim() } : {}),
+    ...(includeType ? { sourceType: metadata.sourceType } : {}),
+    language: metadata.language,
+    ...(optional(metadata.sourceOrganization)
+      ? { sourceOrganization: metadata.sourceOrganization.trim() }
+      : {}),
+    ...(optional(metadata.author) ? { author: metadata.author.trim() } : {}),
+    ...(metadata.publicationDate ? { publicationDate: metadata.publicationDate } : {}),
+    cropIds: metadata.cropIds,
+    topicIds: metadata.topicIds,
+    includeInTraining: metadata.includeInTraining,
+  };
 }
 
-function KnowledgeForm({ initial, isNew, onSubmit, onCancel }: { initial: KnowledgeValues; isNew: boolean; onSubmit: (values: KnowledgeValues) => void; onCancel: () => void }) {
-  const [values, setValues] = useState(initial);
-  const [errors, setErrors] = useState<ReturnType<typeof validateKnowledge>>({});
-  const set = <K extends keyof KnowledgeValues>(key: K, value: KnowledgeValues[K]) => setValues((current) => ({ ...current, [key]: value }));
-  return <form className="admin-form" noValidate onSubmit={(event) => { event.preventDefault(); const found = validateKnowledge(values); setErrors(found); if (!Object.keys(found).length) onSubmit(values); }}>
-    <label>Title<input value={values.title} onChange={(event) => set("title", event.target.value)} aria-invalid={!!errors.title} />{errors.title && <span className="fac-field-error">{errors.title}</span>}</label>
-    <label>Description<textarea rows={2} value={values.description} onChange={(event) => set("description", event.target.value)} /></label>
-    <div className="fac-row">
-      <label>Crop<select value={values.vegetable} onChange={(event) => set("vegetable", event.target.value)}>{knowledgeCrops.map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label>Topic<select value={values.topic} onChange={(event) => set("topic", event.target.value)}>{knowledgeTopics.map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label>Language<select value={values.language} onChange={(event) => set("language", event.target.value)}><option value="rw">Kinyarwanda</option><option value="en">English</option><option value="fr">French</option></select></label>
-    </div>
-    <div className="fac-row">
-      <label>Source<input value={values.author} onChange={(event) => set("author", event.target.value)} placeholder="For example: RAB" aria-invalid={!!errors.author} />{errors.author && <span className="fac-field-error">{errors.author}</span>}</label>
-      <label>Document type<select value={values.kind} onChange={(event) => set("kind", event.target.value as KnowledgeValues["kind"])}>{documentTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
-    </div>
-    {isNew && <label>File<input type="file" accept={documentTypes.map((item) => `.${item.toLowerCase()}`).join(",")} onChange={(event) => { const file = event.target.files?.[0]; set("fileName", file?.name ?? ""); const ext = file?.name.split(".").pop()?.toUpperCase(); if (ext && (documentTypes as string[]).includes(ext)) set("kind", ext as KnowledgeValues["kind"]); }} />{errors.fileName && <span className="fac-field-error">{errors.fileName}</span>}<small className="text-muted-foreground">The file itself is not uploaded in this demo.</small></label>}
-    <DialogFooter><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="submit">{isNew ? "Add document" : "Save details"}</Button></DialogFooter>
-  </form>;
+/** Knowledge Base documents (GET /knowledge/sources) and their review workflow. */
+function KnowledgePage() {
+  const queryClient = useQueryClient();
+  const { permissions, loading: authLoading } = useAuth();
+  const canRead = permissions.includes("knowledge:read");
+  const canManage = permissions.includes("knowledge:manage");
+  const canApprove = permissions.includes("knowledge:approve");
+  const enabled = canRead && !authLoading;
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [status, setStatus] = useState<KnowledgeStatusCode | "all">("all");
+  const [cropId, setCropId] = useState("all");
+  const [topicId, setTopicId] = useState("all");
+  const [page, setPage] = useState(1);
+  const [form, setForm] = useState<{
+    mode: "create" | "edit" | "version";
+    source: KnowledgeSource | null;
+  } | null>(null);
+  const [formError, setFormError] = useState("");
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [pending, setPending] = useState<Pending>(null);
+  const [rejecting, setRejecting] = useState<KnowledgeSource | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const crops = useQuery(cropsQueryOptions(enabled));
+  const topics = useQuery(knowledgeTopicsQueryOptions(enabled));
+  const counts = useQueries({
+    queries: COUNTED.map((item) => knowledgeCountQueryOptions(item, enabled)),
+  });
+  const list = useQuery({
+    ...knowledgeListQueryOptions(
+      {
+        page,
+        ...(debounced ? { q: debounced } : {}),
+        ...(status !== "all" ? { status } : {}),
+        ...(cropId !== "all" ? { cropId } : {}),
+        ...(topicId !== "all" ? { topicId } : {}),
+      },
+      enabled,
+    ),
+    placeholderData: keepPreviousData,
+    refetchInterval: (q) =>
+      q.state.data?.data.some((row) => row.status === "PROCESSING") ? 5000 : false,
+  });
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: adminKnowledgeKey });
+  const formInitial = useMemo(
+    () => (form?.source ? metadataFrom(form.source) : emptyKnowledgeMetadata()),
+    [form],
+  );
+
+  const save = useMutation({
+    mutationFn: async (input: {
+      metadata: KnowledgeMetadata;
+      file: File | null;
+      url: string;
+      changeNote: string;
+    }) => {
+      if (!form) return null;
+      if (form.mode === "edit" && form.source) {
+        return adminApi("PATCH", `knowledge/sources/${form.source.id}`, {
+          body: metadataBody(input.metadata, false),
+        });
+      }
+      const path =
+        form.mode === "version" && form.source
+          ? `knowledge/sources/${form.source.id}/versions`
+          : "knowledge/sources";
+      if (!input.file) {
+        // Web articles and other links: JSON body with an https storage reference.
+        const body =
+          form.mode === "version"
+            ? {
+                storageRef: input.url,
+                ...(input.changeNote ? { changeNote: input.changeNote } : {}),
+              }
+            : {
+                ...metadataBody(input.metadata, true),
+                storageRef: input.url,
+                ...(input.changeNote ? { changeNote: input.changeNote } : {}),
+              };
+        return adminApi("POST", path, { body });
+      }
+      const data = new FormData();
+      data.set("__path", path);
+      data.set("file", input.file);
+      if (input.changeNote) data.set("changeNote", input.changeNote);
+      if (form.mode === "create") {
+        const body = metadataBody(input.metadata, true);
+        for (const [key, value] of Object.entries(body)) {
+          if (Array.isArray(value)) {
+            if (value.length) data.set(key, value.join(","));
+          } else if (value !== undefined) data.set(key, String(value));
+        }
+      }
+      return bffUploadKnowledge({ data });
+    },
+    onSuccess: async () => {
+      const mode = form?.mode;
+      await refresh();
+      setForm(null);
+      setFormError("");
+      toast.success(
+        mode === "edit"
+          ? "Details saved."
+          : mode === "version"
+            ? "New version uploaded. Process it to make it available for review."
+            : "Document added. Process it to make it available for review.",
+      );
+    },
+    onError: (error) => setFormError(adminErrorMessage(error, "The document could not be saved.")),
+  });
+
+  const act = useMutation({
+    mutationFn: ({ source, action }: NonNullable<Pending>) => {
+      const base = `knowledge/sources/${source.id}`;
+      if (action === "delete") return adminApi("DELETE", base);
+      return adminApi("POST", `${base}/${action}`, { body: {} });
+    },
+    onSuccess: async (_r, { action }) => {
+      await refresh();
+      toast.success(actionCopy[action].done);
+    },
+    onError: (error) => toast.error(adminErrorMessage(error, "The action could not be completed.")),
+    onSettled: () => setPending(null),
+  });
+
+  const reject = useMutation({
+    mutationFn: ({ source, reason }: { source: KnowledgeSource; reason: string }) =>
+      adminApi("POST", `knowledge/sources/${source.id}/reject`, { body: { reason } }),
+    onSuccess: async () => {
+      await refresh();
+      setRejecting(null);
+      toast.success("Document rejected. The assistant will not use it.");
+    },
+    onError: (error) =>
+      toast.error(adminErrorMessage(error, "The document could not be rejected.")),
+  });
+
+  const head = (
+    <PageHead
+      title="Knowledge Base"
+      text="Reference documents the farmer assistant may draw on. They support answers; they are not courses and farmers do not see them in Amasomo."
+    >
+      {canManage && (
+        <Button
+          onClick={() => {
+            setFormError("");
+            setForm({ mode: "create", source: null });
+          }}
+        >
+          <Plus aria-hidden />
+          Add document
+        </Button>
+      )}
+    </PageHead>
+  );
+  if (authLoading)
+    return (
+      <>
+        {head}
+        <p className="fac-empty">Loading documents…</p>
+      </>
+    );
+  if (!canRead)
+    return (
+      <>
+        {head}
+        <p className="fac-empty">You do not have permission to view the Knowledge Base.</p>
+      </>
+    );
+
+  const rows = list.data?.data ?? [];
+  const meta = list.data?.meta;
+  const totalPages = Math.max(1, meta?.totalPages ?? 1);
+  const filtered = !!debounced || status !== "all" || cropId !== "all" || topicId !== "all";
+
+  return (
+    <>
+      {head}
+      <div className="admin-stats">
+        {COUNTED.map((item, index) => (
+          <Stat key={item} label={knowledgeStatusLabels[item]} value={counts[index]?.data ?? "…"} />
+        ))}
+      </div>
+      <div className="admin-filters">
+        <input
+          aria-label="Search documents"
+          placeholder="Search title or description"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setPage(1);
+          }}
+        />
+        <select
+          aria-label="Status"
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value as KnowledgeStatusCode | "all");
+            setPage(1);
+          }}
+        >
+          <option value="all">All statuses</option>
+          {(Object.keys(knowledgeStatusLabels) as KnowledgeStatusCode[]).map((item) => (
+            <option key={item} value={item}>
+              {knowledgeStatusLabels[item]}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Crop"
+          value={cropId}
+          onChange={(event) => {
+            setCropId(event.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="all">All crops</option>
+          {(crops.data ?? []).map((crop) => (
+            <option key={crop.id} value={crop.id}>
+              {crop.nameEn}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Topic"
+          value={topicId}
+          onChange={(event) => {
+            setTopicId(event.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="all">All topics</option>
+          {(topics.data ?? []).map((topic) => (
+            <option key={topic.id} value={topic.id}>
+              {topic.nameEn}
+            </option>
+          ))}
+        </select>
+      </div>
+      {list.isError ? (
+        <div className="fac-empty" role="alert">
+          <p>{adminErrorMessage(list.error, "Documents could not be loaded from the server.")}</p>
+          <Button className="mt-3" variant="outline" onClick={() => void list.refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : list.isLoading ? (
+        <p className="fac-empty">Loading documents…</p>
+      ) : !rows.length ? (
+        <p className="fac-empty">
+          {filtered ? "No documents match these filters." : "No documents yet."}
+        </p>
+      ) : (
+        <>
+          <div className="staff-table" aria-busy={list.isFetching}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Crops</th>
+                  <th>Topics</th>
+                  <th>Language</th>
+                  <th>Source</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Added</th>
+                  <th className="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((item) => {
+                  const next = knowledgeNextActions(item);
+                  const actions: [Action, boolean][] = [
+                    ["process", canManage && next.process],
+                    ["submit-review", canManage && next.submitReview],
+                    ["approve", canApprove && next.approve],
+                    ["activate", canApprove && next.activate],
+                    ["deactivate", canApprove && next.deactivate],
+                  ];
+                  return (
+                    <tr key={item.id}>
+                      <td>
+                        <button
+                          type="button"
+                          className="text-left font-bold hover:underline"
+                          onClick={() => setViewing(item.id)}
+                        >
+                          {item.title}
+                        </button>
+                        {item.description && (
+                          <small className="block text-muted-foreground">{item.description}</small>
+                        )}
+                      </td>
+                      <td>{item.crops.map((crop) => crop.nameEn).join(", ") || "—"}</td>
+                      <td>{item.topics.map((topic) => topic.nameEn).join(", ") || "—"}</td>
+                      <td>{item.language === "en" ? "English" : "Kinyarwanda"}</td>
+                      <td>{item.sourceOrganization ?? item.author ?? "—"}</td>
+                      <td>
+                        <span className="type-pill">{sourceTypeLabels[item.sourceType]}</span>
+                      </td>
+                      <td>
+                        <Pill tone={knowledgeStatusTone(item.status)}>
+                          {knowledgeStatusLabels[item.status]}
+                        </Pill>
+                        {item.approvedVersionId && !item.isActive && !item.archivedAt && (
+                          <small className="block text-muted-foreground">Not in use</small>
+                        )}
+                        {!item.includeInTraining && (
+                          <small className="block text-muted-foreground">
+                            Not used for retraining
+                          </small>
+                        )}
+                      </td>
+                      <td>{formatDate(item.createdAt)}</td>
+                      <td className="col-actions">
+                        <RowMenu label={item.title}>
+                          <DropdownMenuItem onSelect={() => setViewing(item.id)}>
+                            View details
+                          </DropdownMenuItem>
+                          {canManage && next.edit && (
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setFormError("");
+                                setForm({ mode: "edit", source: item });
+                              }}
+                            >
+                              Edit details
+                            </DropdownMenuItem>
+                          )}
+                          {canManage && next.newVersion && (
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setFormError("");
+                                setForm({ mode: "version", source: item });
+                              }}
+                            >
+                              Upload new version
+                            </DropdownMenuItem>
+                          )}
+                          {actions.some(([, allowed]) => allowed) && <DropdownMenuSeparator />}
+                          {actions
+                            .filter(([, allowed]) => allowed)
+                            .map(([action]) => (
+                              <DropdownMenuItem
+                                key={action}
+                                onSelect={() => setPending({ source: item, action })}
+                              >
+                                {actionCopy[action].label}
+                              </DropdownMenuItem>
+                            ))}
+                          {canApprove && next.reject && (
+                            <DropdownMenuItem onSelect={() => setRejecting(item)}>
+                              Reject
+                            </DropdownMenuItem>
+                          )}
+                          {canManage && (next.archive || next.remove) && <DropdownMenuSeparator />}
+                          {canManage && next.archive && (
+                            <DropdownMenuItem
+                              onSelect={() => setPending({ source: item, action: "archive" })}
+                            >
+                              Archive
+                            </DropdownMenuItem>
+                          )}
+                          {canManage && next.remove && (
+                            <DropdownMenuItem
+                              onSelect={() => setPending({ source: item, action: "delete" })}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                        </RowMenu>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="admin-actions mt-3 items-center">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </Button>
+            <span className="text-sm">
+              Page {page} of {totalPages} · {meta?.total ?? 0} document(s)
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </>
+      )}
+      <KnowledgeFormDialog
+        open={!!form}
+        mode={form?.mode ?? "create"}
+        initial={formInitial}
+        busy={save.isPending}
+        error={formError}
+        onClose={() => setForm(null)}
+        onSubmit={(input) => save.mutate(input)}
+      />
+      <KnowledgeDetailsDialog sourceId={viewing} onClose={() => setViewing(null)} />
+      <KnowledgeRejectDialog
+        source={rejecting}
+        busy={reject.isPending}
+        onClose={() => setRejecting(null)}
+        onReject={(reason) => rejecting && reject.mutate({ source: rejecting, reason })}
+      />
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(open) => {
+          if (!open) setPending(null);
+        }}
+        title={pending ? actionCopy[pending.action].title : ""}
+        text={pending ? `${pending.source.title}: ${actionCopy[pending.action].text}` : ""}
+        confirmLabel={pending ? actionCopy[pending.action].label : "Confirm"}
+        onConfirm={() => {
+          if (pending) act.mutate(pending);
+        }}
+      />
+    </>
+  );
 }

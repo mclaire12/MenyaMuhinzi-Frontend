@@ -75,19 +75,19 @@ export const registrationSchema = z
       {
         path: "sector",
         value: values.sector,
-        missing: "Andika umurenge.",
+        missing: "Hitamo umurenge.",
         tooLong: "Umurenge ntugomba kurenza inyuguti 80.",
       },
       {
         path: "cell",
         value: values.cell,
-        missing: "Andika akagari.",
+        missing: "Hitamo akagari.",
         tooLong: "Akagari ntikagomba kurenza inyuguti 80.",
       },
       {
         path: "village",
         value: values.village,
-        missing: "Andika umudugudu.",
+        missing: "Hitamo umudugudu.",
         tooLong: "Umudugudu ntugomba kurenza inyuguti 80.",
       },
     ] as const;

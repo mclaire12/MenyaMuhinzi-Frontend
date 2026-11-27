@@ -8,20 +8,24 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-function fill(overrides: Record<string, string> = {}) {
+async function fill(overrides: Record<string, string> = {}) {
   const values: Record<string, string> = {
     "Full name": "Mukeshimana Vestine",
     "Phone number": "0788 555 100",
     "Personal email": "vestine@example.rw",
+    District: "Gasabo",
     Sector: "Kimironko",
     Cell: "Bibare",
     Village: "Imena",
     ...overrides,
   };
   for (const [label, value] of Object.entries(values)) {
+    // Each place is listed once the level above it is chosen and the locations are loaded.
+    if (value && ["Sector", "Cell", "Village"].includes(label)) {
+      await screen.findByRole("option", { name: value });
+    }
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
-  fireEvent.change(screen.getByLabelText("District"), { target: { value: "Gasabo" } });
 }
 
 describe("BasicPhoneFarmerForm", () => {
@@ -31,7 +35,7 @@ describe("BasicPhoneFarmerForm", () => {
 
   it("refuses to submit without a personal email, cell or village", async () => {
     render(<BasicPhoneFarmerForm mode="direct" onCreated={vi.fn()} onCancel={vi.fn()} />);
-    fill({ "Personal email": "", Cell: "", Village: "" });
+    await fill({ "Personal email": "", Cell: "", Village: "" });
     fireEvent.click(screen.getByRole("button", { name: "Register farmer" }));
 
     expect(await screen.findByText("Enter a valid personal email address.")).toBeInTheDocument();
@@ -47,7 +51,7 @@ describe("BasicPhoneFarmerForm", () => {
       fullName: "Mukeshimana Vestine",
     });
     render(<BasicPhoneFarmerForm mode="direct" onCreated={onCreated} onCancel={vi.fn()} />);
-    fill();
+    await fill();
     fireEvent.click(screen.getByRole("button", { name: "Register farmer" }));
 
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
@@ -77,7 +81,7 @@ describe("BasicPhoneFarmerForm", () => {
     });
     render(<BasicPhoneFarmerForm mode="request" onCreated={vi.fn()} onCancel={vi.fn()} />);
     expect(screen.queryByLabelText("Initial password (optional)")).toBeNull();
-    fill();
+    await fill();
     fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
 
     await waitFor(() =>

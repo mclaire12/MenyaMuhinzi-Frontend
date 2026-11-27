@@ -52,7 +52,7 @@ describe("account request decisions", () => {
     expect(invalidate).toHaveBeenCalledWith({
       predicate: expect.any(Function),
     });
-    const predicate = invalidate.mock.calls.find((call) => "predicate" in call[0])?.[0].predicate;
+    const predicate = invalidate.mock.calls.find((call) => call[0] && "predicate" in call[0])?.[0]?.predicate;
     expect(accountRequestQueriesPredicate(["account-requests", "list"])).toBe(true);
     expect(accountRequestQueriesPredicate(["courses"])).toBe(false);
     expect(predicate?.({ queryKey: ["account-requests", "count", "PENDING"] } as never)).toBe(true);

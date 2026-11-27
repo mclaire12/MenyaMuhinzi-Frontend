@@ -26,7 +26,7 @@ describe("useAccountRequestDecisions", () => {
   });
 
   it("prevents overlapping approve submissions for the same request", async () => {
-    let resolve!: (value: unknown) => void;
+    let resolve!: (value: Awaited<ReturnType<typeof approveAccountRequest>>) => void;
     vi.mocked(approveAccountRequest).mockImplementation(
       () =>
         new Promise((res) => {
@@ -37,7 +37,7 @@ describe("useAccountRequestDecisions", () => {
     result.current.approve.mutate({ requestId });
     await waitFor(() => expect(result.current.isDeciding).toBe(true));
     expect(result.current.isDecidingRequest(requestId)).toBe(true);
-    resolve({ id: requestId, applicant: { fullName: "Jean" }, status: "APPROVED" });
+    resolve({ id: requestId, applicant: { fullName: "Jean" }, status: "APPROVED" } as never);
     await waitFor(() => expect(result.current.isDeciding).toBe(false));
     expect(approveAccountRequest).toHaveBeenCalledTimes(1);
     expect(approveAccountRequest).toHaveBeenCalledWith(requestId, {});

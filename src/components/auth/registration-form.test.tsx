@@ -71,11 +71,17 @@ function fillCommonFields() {
   fireEvent.change(screen.getByLabelText("Akarere"), { target: { value: "Gasabo" } });
 }
 
-function fillFarmerForm() {
+async function choosePlace(label: string, value: string) {
+  // Places are listed once the level above is chosen and the location list has loaded.
+  await screen.findByRole("option", { name: value });
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+}
+
+async function fillFarmerForm() {
   fillCommonFields();
-  fireEvent.change(screen.getByLabelText("Umurenge"), { target: { value: "Remera" } });
-  fireEvent.change(screen.getByLabelText("Akagari"), { target: { value: "Rukiri I" } });
-  fireEvent.change(screen.getByLabelText("Umudugudu"), { target: { value: "Amarembo" } });
+  await choosePlace("Umurenge", "Remera");
+  await choosePlace("Akagari", "Rukiri I");
+  await choosePlace("Umudugudu", "Gisimenti");
 }
 
 function submitForm() {
@@ -92,7 +98,7 @@ describe("RegistrationForm", () => {
   it("registers a smartphone farmer with the full address and asks them to verify their email", async () => {
     registerAccount.mockResolvedValue(farmerRegistered);
     render(<RegistrationForm onReturnToLogin={() => {}} />);
-    fillFarmerForm();
+    await fillFarmerForm();
     submitForm();
 
     expect(
@@ -108,7 +114,7 @@ describe("RegistrationForm", () => {
         location: expect.objectContaining({
           sector: "Remera",
           cell: "Rukiri I",
-          village: "Amarembo",
+          village: "Gisimenti",
         }),
       }),
     );
@@ -117,7 +123,7 @@ describe("RegistrationForm", () => {
   it("does not claim the verification email was sent when delivery failed", async () => {
     registerAccount.mockResolvedValue({ ...farmerRegistered, verificationEmailSent: false });
     render(<RegistrationForm onReturnToLogin={() => {}} />);
-    fillFarmerForm();
+    await fillFarmerForm();
     submitForm();
 
     expect(await screen.findByText(/ntiyashoboye koherezwa/)).toBeInTheDocument();
@@ -131,8 +137,8 @@ describe("RegistrationForm", () => {
     fireEvent.change(screen.getByLabelText("Email yawe bwite"), { target: { value: "" } });
     submitForm();
 
-    expect(await screen.findByText("Andika akagari.")).toBeInTheDocument();
-    expect(screen.getByText("Andika umudugudu.")).toBeInTheDocument();
+    expect(await screen.findByText("Hitamo akagari.")).toBeInTheDocument();
+    expect(screen.getByText("Hitamo umudugudu.")).toBeInTheDocument();
     expect(registerAccount).not.toHaveBeenCalled();
   });
 
@@ -183,7 +189,7 @@ describe("RegistrationForm", () => {
       new ApiError("Unable to reach the API.", { kind: "network" }),
     );
     render(<RegistrationForm onReturnToLogin={() => {}} />);
-    fillFarmerForm();
+    await fillFarmerForm();
     submitForm();
 
     expect(

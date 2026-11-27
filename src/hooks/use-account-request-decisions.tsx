@@ -30,7 +30,7 @@ export function useAccountRequestDecisions() {
   );
 
   const approve = useMutation({
-    mutationFn: async ({ requestId, note }: { requestId: string; note?: string }) => {
+    mutationFn: async ({ requestId, note }: { requestId: string; note?: string | undefined }) => {
       const trimmed = note?.trim();
       return approveAccountRequest(requestId, trimmed ? { note: trimmed } : {});
     },

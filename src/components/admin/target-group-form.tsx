@@ -1,45 +1,160 @@
+import { useQuery } from "@tanstack/react-query";
+import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
+import { LocationFields } from "@/components/location/location-fields";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
-import { audienceLabels, cropInterestOptions, validateTargetGroup, type GroupErrors, type TargetGroupValues } from "@/lib/admin/groups";
-import type { TargetAudience } from "@/lib/admin/types";
-import { provinces } from "@/lib/mock/crops";
-import type { CropSlug } from "@/lib/mock/types";
+import {
+  audienceCodeLabels,
+  cropLabel,
+  cropsQueryOptions,
+  validateGroupValues,
+  type AdminGroupValues,
+  type GroupFieldErrors,
+  type TargetAudienceCode,
+} from "@/lib/admin/backend-groups";
 
-type Props = { initial: TargetGroupValues; groupId: string | null; submitLabel: string; onSubmit: (values: TargetGroupValues) => void; onCancel: () => void };
+type Props = {
+  initial: AdminGroupValues;
+  submitLabel: string;
+  busy?: boolean;
+  serverError?: string;
+  onSubmit: (values: AdminGroupValues) => void;
+  onCancel: () => void;
+};
 
-export function TargetGroupForm({ initial, groupId, submitLabel, onSubmit, onCancel }: Props) {
+/** Create / edit a course-targeting group (saved through POST/PATCH /admin/groups). */
+export function TargetGroupForm({
+  initial,
+  submitLabel,
+  busy,
+  serverError,
+  onSubmit,
+  onCancel,
+}: Props) {
+  const crops = useQuery(cropsQueryOptions(true));
   const [values, setValues] = useState(initial);
-  const [errors, setErrors] = useState<GroupErrors>({});
-  const set = <K extends keyof TargetGroupValues>(key: K, value: TargetGroupValues[K]) => { setValues((current) => ({ ...current, [key]: value })); setErrors((current) => { const next = { ...current }; delete next[key]; return next; }); };
-  const error = (key: keyof TargetGroupValues) => errors[key] && <span className="fac-field-error">{errors[key]}</span>;
+  const [errors, setErrors] = useState<GroupFieldErrors>({});
+  const set = <K extends keyof AdminGroupValues>(key: K, value: AdminGroupValues[K]) => {
+    setValues((current) => ({ ...current, [key]: value }));
+    setErrors((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  };
+  const error = (key: keyof AdminGroupValues) =>
+    errors[key] && (
+      <span className="fac-field-error" role="alert">
+        {errors[key]}
+      </span>
+    );
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    const found = validateTargetGroup(values, groupId);
+    const found = validateGroupValues(values);
     setErrors(found);
     if (Object.keys(found).length) return;
     onSubmit(values);
   }
 
-  return <form className="admin-form" noValidate onSubmit={submit}>
-    <p className="fac-note">Groups decide who a course is published to. Farmers are never added to a group by hand: registered farmers whose location and crop match the group see its courses.</p>
-    <label>Group name<input value={values.name} onChange={(event) => set("name", event.target.value)} placeholder="For example: Northern Province Tomato Farmers" aria-invalid={!!errors.name} />{error("name")}</label>
-    <label>Description<textarea rows={2} value={values.description} onChange={(event) => set("description", event.target.value)} aria-invalid={!!errors.description} />{error("description")}</label>
-    <div className="fac-row">
-      <label>Target audience and level<select value={values.audience} onChange={(event) => set("audience", event.target.value as TargetAudience)}>{(Object.keys(audienceLabels) as TargetAudience[]).map((item) => <option key={item} value={item}>{audienceLabels[item]}</option>)}</select></label>
-      <label>Crop interest<select value={values.crop} onChange={(event) => set("crop", event.target.value as CropSlug | "mixed")}>{cropInterestOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-    </div>
-    <div className="fac-row">
-      <label>Province<select value={values.province} onChange={(event) => setValues((current) => ({ ...current, province: event.target.value, district: "", sector: "" }))}>{Object.keys(provinces).map((item) => <option key={item}>{item}</option>)}</select>{error("province")}</label>
-      <label>District<select value={values.district} onChange={(event) => setValues((current) => ({ ...current, district: event.target.value, sector: event.target.value ? current.sector : "" }))}><option value="">Whole province</option>{(provinces[values.province] ?? []).map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label>Sector (optional)<input value={values.sector} disabled={!values.district} onChange={(event) => set("sector", event.target.value)} placeholder={values.district ? "Whole district" : "Choose a district first"} /></label>
-    </div>
-    <div className="fac-row">
-      <label>Estimated farmers<input type="number" min={1} value={Number.isNaN(values.estimatedFarmers) ? "" : values.estimatedFarmers} onChange={(event) => set("estimatedFarmers", event.target.valueAsNumber)} aria-invalid={!!errors.estimatedFarmers} /><small className="text-muted-foreground">For planning only. It does not add anyone to the group.</small>{error("estimatedFarmers")}</label>
-      <label>Language<select value={values.language} onChange={(event) => set("language", event.target.value as "rw" | "en")}><option value="rw">Kinyarwanda</option><option value="en">English</option></select></label>
-    </div>
-    <label>Notes (optional)<textarea rows={2} value={values.notes} onChange={(event) => set("notes", event.target.value)} /></label>
-    <DialogFooter><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="submit">{submitLabel}</Button></DialogFooter>
-  </form>;
+  return (
+    <form className="admin-form" noValidate onSubmit={submit}>
+      <p className="fac-note">
+        Groups decide who a course is published to. Farmers are not added by hand: registered
+        farmers whose location and crop match the group see its courses.
+      </p>
+      <label>
+        Group name
+        <input
+          value={values.name}
+          onChange={(event) => set("name", event.target.value)}
+          placeholder="For example: Musanze tomato growers"
+          aria-invalid={!!errors.name}
+        />
+        {error("name")}
+      </label>
+      <label>
+        Description (optional)
+        <textarea
+          rows={2}
+          value={values.description}
+          onChange={(event) => set("description", event.target.value)}
+        />
+      </label>
+      <div className="fac-row">
+        <label>
+          Target audience
+          <select
+            value={values.targetAudience}
+            onChange={(event) => set("targetAudience", event.target.value as TargetAudienceCode)}
+          >
+            {(Object.keys(audienceCodeLabels) as TargetAudienceCode[]).map((item) => (
+              <option key={item} value={item}>
+                {audienceCodeLabels[item]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Crop
+          <select
+            value={values.cropId}
+            onChange={(event) => set("cropId", event.target.value)}
+            aria-invalid={!!errors.cropId}
+            disabled={crops.isLoading}
+          >
+            <option value="">{crops.isLoading ? "Loading crops…" : "Choose a crop"}</option>
+            {(crops.data ?? []).map((crop) => (
+              <option key={crop.id} value={crop.id}>
+                {cropLabel(crop)}
+              </option>
+            ))}
+          </select>
+          {crops.isError && <span className="fac-field-error">Crops could not be loaded.</span>}
+          {error("cropId")}
+        </label>
+      </div>
+      <LocationFields
+        idPrefix="target-group"
+        levels={["province", "district", "sector"]}
+        value={{ ...values, cell: "", village: "" }}
+        errors={{ district: errors.district }}
+        labels={{ sector: "Sector (optional)" }}
+        placeholders={{ sector: "Whole district" }}
+        onChange={({ province, district, sector }) => {
+          setValues((current) => ({ ...current, province, district, sector }));
+          setErrors(({ district: _cleared, ...rest }) => rest);
+        }}
+      />
+      <label>
+        Estimated farmers
+        <input
+          type="number"
+          min={0}
+          value={Number.isNaN(values.estimatedFarmerCount) ? "" : values.estimatedFarmerCount}
+          onChange={(event) => set("estimatedFarmerCount", event.target.valueAsNumber)}
+          aria-invalid={!!errors.estimatedFarmerCount}
+        />
+        <small className="text-muted-foreground">
+          For planning only. It does not add anyone to the group.
+        </small>
+        {error("estimatedFarmerCount")}
+      </label>
+      {serverError && (
+        <p className="fac-field-error" role="alert">
+          {serverError}
+        </p>
+      )}
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={busy}>
+          {busy && <LoaderCircle className="animate-spin" aria-hidden />}
+          {submitLabel}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
 }
